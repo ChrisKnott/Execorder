@@ -103,6 +103,10 @@ static PyObject* exec(PyObject *self, PyObject *args){
 
 // If an object is immutable (well, hashable) then save it and use that object always in recordings
 PyObject* check_const(PyObject* obj){
+    if(obj == NULL){
+        return NULL;
+    }
+    
     PyObject* const_obj = PyDict_GetItemWithError(consts, obj);
     if(PyErr_Occurred()){
         PyErr_Clear();
@@ -124,18 +128,23 @@ void Execorder_Mutate(PyFrameObject* frame, int opcode, int i, PyObject* a, PyOb
 
     switch(opcode){
         // Name bind
+        case DELETE_NAME:
         case STORE_NAME:                // a[b] = c (b = c in namespace a)
             name = b;
             break;
+        case DELETE_GLOBAL:
         case STORE_GLOBAL:              // a = c
             name = a;
             break;
+        case DELETE_FAST:
         case STORE_FAST:                // FASTS[i] = c
             name = PyTuple_GetItem(frame->f_code->co_varnames, i);
             break;
 
         // Bound object mutates
+        case DELETE_SUBSCR:
         case STORE_SUBSCR:              // a[b] = c
+        case DELETE_ATTR:
         case STORE_ATTR:                // a.b = c
             recording = get_recording(frame, true);
             if(recording && recording->tracked_objects.contains(a)){

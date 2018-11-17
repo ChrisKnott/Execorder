@@ -42,7 +42,6 @@ static void new_milestone(RecordingObject* recording){
 static PyObject* Recording_new(PyTypeObject *type, PyObject *args, PyObject *kwds){
     auto self = (RecordingObject *) type->tp_alloc(type, 0);
     self->tracked_objects = spp::sparse_hash_set<PyObject*>();
-    self->current_step = 0;
     self->steps.reserve(1000);
     new_milestone(self);
     return (PyObject*) self;
@@ -97,13 +96,10 @@ static PyObject* Recording_state(PyObject *self, PyObject *args){
                         PyObject_SetItem(objects[a], b, c);
                         break;
 
-                    case STORE_GLOBAL:  // b = c
-                        obj = objects[c];
-                        PyDict_SetItem(globals, b, obj ? obj : c);
-                        break;
-                    case STORE_FAST:
-                    case STORE_NAME:    // b = c
+                    case STORE_FAST:    // b = c
+                    case STORE_NAME:    
                         if(a == recording->global_frame){
+                    case STORE_GLOBAL:
                             obj = objects[c];
                             PyDict_SetItem(globals, b, obj ? obj : c);
                         } else if(a == frame){
@@ -111,6 +107,22 @@ static PyObject* Recording_state(PyObject *self, PyObject *args){
                             PyDict_SetItem(locals, b, obj ? obj : c);
                         }
                         break;
+
+                    case DELETE_ATTR:   // del a.b
+                        PyObject_DelAttr(objects[a], b);
+                        break;
+                    case DELETE_SUBSCR: // del a[b]
+                        PyObject_DelItem(objects[a], b);
+                        break;
+
+                    case DELETE_FAST:   // del b
+                    case DELETE_NAME:
+                        if(a == recording->global_frame){
+                    case DELETE_GLOBAL:
+                            PyDict_DelItem(globals, b);
+                        } else if(a == frame){
+                            PyDict_DelItem(locals, b);
+                        }
                 }
             } else {
                 break;
@@ -188,9 +200,15 @@ void Recording_record(RecordingObject* recording, int event, PyObject* a, PyObje
         case STORE_SUBSCR:
         case STORE_ATTR:
             track_object(b, (PyObject*)recording);
+        case DELETE_GLOBAL:
+        case DELETE_FAST:
+        case DELETE_NAME:
+        case DELETE_SUBSCR:
+        case DELETE_ATTR:
             mutation = Mutation(recording->steps.size(), event, a, b, c);
             recording->mutations->push_back(mutation);
             break;
+
         case PyTrace_CALL:
         case PyTrace_EXCEPTION:
         case PyTrace_LINE:
@@ -205,7 +223,6 @@ void Recording_record(RecordingObject* recording, int event, PyObject* a, PyObje
         new_milestone(recording);
     }
 }
-
 
 
 
