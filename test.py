@@ -1,34 +1,15 @@
-import execorder, time
+import execorder
 
 code = '''
 import random
-
-random.seed(1231231)
-
-X = [random.randint(0, 100) for n in range(500)]
-
-done = False
-while not done:
-    done = True
-    for i, _ in enumerate(X):
-        if i < len(X) - 1:
-            a, b = X[i], X[i + 1]
-            if a > b:
-                done = False
-                X[i], X[i + 1] = b, a
-
+X = []
+for i in range(10):
+    X += [random.randint(1, 100)]
+    random.shuffle(X)
 '''
 
-def callback(recording):
-    print('User code')
+recording = execorder.exec(code)           # Execute the code and get a Recording back
 
-start = time.process_time()
-exec(code, {})
-normal_time = time.process_time() - start
-print('Normal exec:   %.5f' % normal_time)
-
-start = time.process_time()
-recording = execorder.exec(code, 0, callback)
-recorded_time = time.process_time() - start
-print('Recorded exec: %.5f (%.2fx slower)' % (recorded_time, recorded_time / normal_time))
-
+for n in range(40):                        # Efficiently query the state at any time
+    X = recording.state(n).get('X', None)
+    print(X)
