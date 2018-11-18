@@ -1,5 +1,8 @@
 # Execorder
-A Python module with an improved `exec()` function that allows the execution to be recorded, for the execution to be bounded to a certain time or number of steps, and for callbacks into user code during execution.
+A Python module with an improved `exec()` function that allows;
+ - the execution to be recorded
+ - the execution to be bounded to a certain time or number of steps
+ - callbacks to be made into user code during execution.
 
 ```python
 import execorder
