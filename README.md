@@ -39,3 +39,4 @@ Execorder will remember that on the first line we bound an object to the name `a
 
 Execorder saves the state of memory at certain 'milestones' in the execution, and between these milestones, records only the specific mutations that happened. By doing this, Execorder can very quickly recover the state of an object at any step of execution (far faster than the original Python code took to run), but also keeps the memory usage relatively low.
 
+Code executed with `execorder.exec()` runs 2-3x slower than code executed with normal `exec()`, but afterwards state can be queried from a recording in a few milliseconds, even if the original script took several seconds to run.
