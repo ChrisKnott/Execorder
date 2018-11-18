@@ -42,8 +42,9 @@ static void new_milestone(RecordingObject* recording){
 
 static PyObject* Recording_new(PyTypeObject *type, PyObject *args, PyObject *kwds){
     auto self = (RecordingObject *) type->tp_alloc(type, 0);
-    self->tracked_objects = spp::sparse_hash_set<PyObject*>();
+    self->tracked_objects = ObjectSet();
     self->steps.reserve(1000);
+    self->callback_counter = 0;
     new_milestone(self);
     return (PyObject*) self;
 }
@@ -218,8 +219,8 @@ PyTypeObject* Recording_Type(){
     return &RecordingType;
 }
 
-PyObject* Recording_New(){
-    return Recording_new(&RecordingType, NULL, NULL);
+RecordingObject* Recording_New(){
+    return (RecordingObject*)Recording_new(&RecordingType, NULL, NULL);
 }
 
 int track_object(PyObject* obj, PyObject* args){
@@ -246,7 +247,8 @@ int track_object(PyObject* obj, PyObject* args){
 }
 
 // Adds an event to a recording
-void Recording_record(RecordingObject* recording, int event, PyObject* a, PyObject* b, PyObject* c){
+RecordingObject* Recording_record(  RecordingObject* recording, int event, 
+                                    PyObject* a, PyObject* b, PyObject* c){
     Mutation mutation;
     switch(event){
         case STORE_GLOBAL:
@@ -285,12 +287,45 @@ void Recording_record(RecordingObject* recording, int event, PyObject* a, PyObje
             auto frame = (PyFrameObject*)a;
             int line_number = frame->f_lineno;
             recording->steps.push_back(Step(line_number, event, frame));
+            if(recording->callback){
+                recording->callback_counter++;
+            }
     }
 
+    // We have recorded 200,000 mutations, make new milestone
     if(recording->mutations->size() >= 200000){
         recording->tracked_objects.clear();
         new_milestone(recording);
     }
+
+    // We have exceeded the specified number of execution steps, exit
+    int current_steps = (int)recording->steps.size();
+    if(recording->max_steps && current_steps >= recording->max_steps){
+        PyErr_SetString(PyExc_RuntimeError, "Reached maximum execution steps");
+        return NULL;
+    }
+
+    // TODO: make this customisable, based on time as well
+    // We haven't called back in a while, do it now
+    if(recording->callback && recording->callback_counter == 50000){
+        recording->callback_counter = 0;
+        if(PyCallable_Check(recording->callback)){
+            auto args = Py_BuildValue("(O)", recording);
+
+            // Restore Python's normal eval_frame function
+            auto eval_frame = recording->interpreter->eval_frame;
+            recording->interpreter->eval_frame = recording->real_eval_frame;
+
+            PyEval_SetTrace(NULL, NULL);                    // Stop tracing
+            PyEval_CallObject(recording->callback, args);   // Call into to user code
+            PyEval_SetTrace(recording->trace_func, NULL);   // Start tracing again
+            
+            // Go back to adjusted version of eval_frame
+            recording->interpreter->eval_frame = eval_frame;
+        }
+    }
+
+    return recording;
 }
 
 

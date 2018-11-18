@@ -8,7 +8,6 @@
 #include "execorder.h"
 #include "recording.h"
 
-auto execorder_str = PyUnicode_FromString("<execorder>");
 auto consts = PyDict_New();
 auto recordings = PyDict_New();
 int exec_num = 0;
@@ -53,23 +52,27 @@ static int trace(PyObject *obj, PyFrameObject *frame, int what, PyObject *arg){
             }
         }
 
-        Recording_record(recording, what, (PyObject*)frame, NULL, NULL);
+        if(!Recording_record(recording, what, (PyObject*)frame, NULL, NULL)){
+            PyEval_SetTrace(NULL, NULL);
+            Py_CLEAR(frame->f_trace);
+            return -1;
+        }
     }
     return 0;
 }
 
-static PyObject* compile_and_exec(PyObject *code_str, PyObject* recording){
-    // code = compile(code_str, '<execorder>', 'exec')
+static RecordingObject* compile_and_exec(PyObject *code_str, RecordingObject* recording){
+    // code = compile(code_str, '<execorder123>', 'exec')
     const char* code_utf8 = PyUnicode_AsUTF8(code_str);
     auto filename = PyUnicode_FromFormat("<execorder%d>", exec_num++);
     auto code = (PyCodeObject*)Py_CompileStringObject(code_utf8, filename, Py_file_input, NULL, -1);
     if(PyErr_Occurred()){
         return NULL;
     } else {
-        PyDict_SetItem(recordings, filename, recording);
+        PyDict_SetItem(recordings, filename, (PyObject*)recording);
     }
 
-    // exec(code, {}, {})
+    // exec(code, globals(), {})
     auto globals = PyDict_New();
     PyDict_SetItemString(globals, "__builtins__", PyEval_GetBuiltins());
     PyEval_EvalCode((PyObject*)code, globals, NULL);
@@ -78,27 +81,35 @@ static PyObject* compile_and_exec(PyObject *code_str, PyObject* recording){
     PyDict_DelItem(recordings, filename);
     
     if(PyErr_Occurred()){
+        // TODO: consider option/flag to still return (partial) recording here
         return NULL;
     }
     return recording;
 }
 
 static PyObject* exec(PyObject *self, PyObject *args){
-    auto interpreter = PyThreadState_Get()->interp;
-    auto eval_frame = interpreter->eval_frame;
-    auto code_str = PyTuple_GET_ITEM(args, 0);
-    auto recording = Recording_New();
+    PyObject *code_str, *callback = NULL, *max_steps = NULL;
+    if (PyArg_UnpackTuple(args, "exec", 1, 3, &code_str, &max_steps, &callback)) {
+        auto recording = Recording_New();
+        recording->max_steps = max_steps ? (int)PyLong_AsLong(max_steps) : 0;
+        recording->callback = callback;
+        recording->interpreter = PyThreadState_Get()->interp;
+        recording->real_eval_frame = recording->interpreter->eval_frame;
+        recording->trace_func = (Py_tracefunc)trace;
 
-    // Replace eval_frame with adjusted version from this binary
-    interpreter->eval_frame = _PyEval_EvalFrameDefault;
-    PyEval_SetTrace((Py_tracefunc) trace, NULL);        // Start tracing
+        // Replace eval_frame with adjusted version from this binary
+        recording->interpreter->eval_frame = _PyEval_EvalFrameDefault;
+        
+        PyEval_SetTrace(recording->trace_func, NULL);       // Start tracing
+        recording = compile_and_exec(code_str, recording);
+        PyEval_SetTrace(NULL, NULL);                        // Stop tracing
 
-    recording = compile_and_exec(code_str, recording);
-
-    interpreter->eval_frame = eval_frame;               // Put eval_frame back
-    PyEval_SetTrace(NULL, NULL);                        // Stop tracing
-
-    return recording;
+        // Put eval_frame back
+        recording->interpreter->eval_frame = recording->real_eval_frame;
+        
+        return (PyObject*)recording;
+    }
+    return NULL;
 }
 
 // If an object is immutable (well, hashable) then save it and use that object always in recordings
@@ -147,19 +158,19 @@ void Execorder_Mutate(PyFrameObject* frame, int opcode, int i, PyObject* a, PyOb
         case STORE_ATTR:                // a.b = c
         case DELETE_ATTR:
 
-        case INPLACE_POWER:
-        case INPLACE_MULTIPLY:
-        case INPLACE_MATRIX_MULTIPLY:
-        case INPLACE_TRUE_DIVIDE:
-        case INPLACE_FLOOR_DIVIDE:
-        case INPLACE_MODULO:
-        case INPLACE_ADD:
-        case INPLACE_SUBTRACT:
-        case INPLACE_LSHIFT:
-        case INPLACE_RSHIFT:
-        case INPLACE_AND:
-        case INPLACE_XOR:
-        case INPLACE_OR:
+        case INPLACE_POWER:             // a **= b
+        case INPLACE_MULTIPLY:          // a *= b
+        case INPLACE_MATRIX_MULTIPLY:   // a @= b
+        case INPLACE_TRUE_DIVIDE:       // a /= b
+        case INPLACE_FLOOR_DIVIDE:      // a //= b
+        case INPLACE_MODULO:            // a %= b
+        case INPLACE_ADD:               // a += b
+        case INPLACE_SUBTRACT:          // a -= b
+        case INPLACE_LSHIFT:            // a <<= b
+        case INPLACE_RSHIFT:            // a >>= b
+        case INPLACE_AND:               // a &= b
+        case INPLACE_XOR:               // a ^= b
+        case INPLACE_OR:                // a |= b
             recording = get_recording(frame, true);
             if(recording && recording->tracked_objects.contains(a)){
                 Recording_record(recording, opcode, a, check_const(b), c);

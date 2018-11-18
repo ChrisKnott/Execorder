@@ -1,5 +1,6 @@
 
-//	This is a near-exact copy of ceval.c from Python 3.7, with a few callbacks added
+// This is a near-exact copy of ceval.c from Python 3.7, with about 20 calls to
+// Execorder_Mutate() added so that we can efficiently record mutations of objects
 
 #define Py_BUILD_CORE
 #include "execorder.h"
@@ -1506,7 +1507,7 @@ _PyEval_EvalFrameDefault(PyFrameObject *f, int throwflag)
             }
             SET_TOP(sum);
             if (sum == NULL)
-                goto error;
+                goto error; // TODO: Add decrefs on error for all of these
             Execorder_Mutate(f, INPLACE_ADD, 0, left, right, NULL);
             Py_DECREF(right);
             DISPATCH();
