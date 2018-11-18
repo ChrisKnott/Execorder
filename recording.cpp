@@ -14,6 +14,7 @@ auto bytesio_str = PyUnicode_FromString("BytesIO");
 
 static void Recording_dealloc(RecordingObject *self){
     Py_DECREF(self->pickler);
+    Py_DECREF(self->code);
     self->pickle_order = NULL;
 
     MutationList* mutations; PickleOrder* pickle_order; PyObject* pickle_bytes;
@@ -307,7 +308,7 @@ RecordingObject* Recording_record(  RecordingObject* recording, int event,
 
     // TODO: make this customisable, based on time as well
     // We haven't called back in a while, do it now
-    if(recording->callback && recording->callback_counter == 50000){
+    if(recording->callback && recording->callback_counter >= 50000){
         recording->callback_counter = 0;
         if(PyCallable_Check(recording->callback)){
             auto args = Py_BuildValue("(O)", recording);

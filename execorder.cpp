@@ -96,6 +96,8 @@ static PyObject* exec(PyObject *self, PyObject *args){
         recording->interpreter = PyThreadState_Get()->interp;
         recording->real_eval_frame = recording->interpreter->eval_frame;
         recording->trace_func = (Py_tracefunc)trace;
+        recording->code = code_str;
+        Py_INCREF(recording->code);
 
         // Replace eval_frame with adjusted version from this binary
         recording->interpreter->eval_frame = _PyEval_EvalFrameDefault;
