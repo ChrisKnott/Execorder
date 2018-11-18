@@ -15,9 +15,9 @@ for i in range(10):
     random.shuffle(X)
 '''
 
-recording = execorder.exec(code)
+recording = execorder.exec(code)           # Execute the code and get a Recording back
 
-for n in range(40):
+for n in range(40):                        # Efficiently query the state at any time
     X = recording.state(n).get('X', None)
     print(X)
 
