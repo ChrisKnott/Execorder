@@ -4,6 +4,7 @@
 #include "structmember.h"
 #include "opcode.h"
 
+using ObjectMap = spp::sparse_hash_map<PyObject*, PyObject*>;
 auto io_module = PyImport_ImportModule("io");
 auto pickle_module = PyImport_ImportModule("_pickle");
 auto pickler_str = PyUnicode_FromString("Pickler");
@@ -47,9 +48,35 @@ static PyObject* Recording_new(PyTypeObject *type, PyObject *args, PyObject *kwd
     return (PyObject*) self;
 }
 
-static PyObject* Recording_state(PyObject *self, PyObject *args){
+static void inplace_opcode(int opcode, ObjectMap& objects, PyObject* a, PyObject* b){
+    PyObject* obj = objects[b];
+    obj = obj ? obj : b;
+
+    switch(opcode){
+        case INPLACE_POWER:
+            objects[a] = PyNumber_InPlacePower(objects[a], obj, Py_None);
+            break;
+        case INPLACE_MULTIPLY:
+        case INPLACE_MATRIX_MULTIPLY:
+        case INPLACE_TRUE_DIVIDE:
+        case INPLACE_FLOOR_DIVIDE:
+        case INPLACE_MODULO:
+        case INPLACE_ADD:
+            objects[a] = PyNumber_InPlaceAdd(objects[a], obj);
+            break;
+        case INPLACE_SUBTRACT:
+        case INPLACE_LSHIFT:
+        case INPLACE_RSHIFT:
+        case INPLACE_AND:
+        case INPLACE_XOR:
+        case INPLACE_OR:
+            break;
+    }
+}
+
+static PyObject* Recording_dicts(PyObject *self, PyObject *args){
     PyObject* step_obj;
-    if (PyArg_UnpackTuple(args, "state", 1, 1, &step_obj)) {
+    if (PyArg_UnpackTuple(args, "dicts", 1, 1, &step_obj)) {
         RecordingObject* recording = (RecordingObject*)self;
         int step = std::min((int)recording->steps.size() - 1, (int)PyLong_AsLong(step_obj));
         auto frame = (PyObject*)std::get<2>(recording->steps[step]);
@@ -74,7 +101,7 @@ static PyObject* Recording_state(PyObject *self, PyObject *args){
         auto bytes = PyObject_CallMethod(pickle_bytes, "getvalue", NULL);               // bytes = pickle_bytes.getvalue()
         auto bytesio = PyObject_CallMethodObjArgs(io_module, bytesio_str, bytes, NULL); // bytes_io = io.BytesIO(bytes)
         auto unpickler = PyObject_CallMethodObjArgs(pickle_module, unpickler_str, bytesio, NULL);
-        auto objects = spp::sparse_hash_map<PyObject*, PyObject*>();
+        auto objects = ObjectMap();
         
         for(auto& obj_id : *pickle_order){
             objects[obj_id] = PyObject_CallMethod(unpickler, "load", NULL);
@@ -123,6 +150,23 @@ static PyObject* Recording_state(PyObject *self, PyObject *args){
                         } else if(a == frame){
                             PyDict_DelItem(locals, b);
                         }
+                        break;
+
+                    case INPLACE_POWER:
+                    case INPLACE_MULTIPLY:
+                    case INPLACE_MATRIX_MULTIPLY:
+                    case INPLACE_TRUE_DIVIDE:
+                    case INPLACE_FLOOR_DIVIDE:
+                    case INPLACE_MODULO:
+                    case INPLACE_ADD:
+                    case INPLACE_SUBTRACT:
+                    case INPLACE_LSHIFT:
+                    case INPLACE_RSHIFT:
+                    case INPLACE_AND:
+                    case INPLACE_XOR:
+                    case INPLACE_OR:
+                        inplace_opcode(op, objects, a, b);
+                        break;
                 }
             } else {
                 break;
@@ -134,6 +178,17 @@ static PyObject* Recording_state(PyObject *self, PyObject *args){
     return NULL;
 }
 
+static PyObject* Recording_state(PyObject *self, PyObject *args){
+    auto globals_locals = Recording_dicts(self, args);
+    if(globals_locals == NULL){
+        return NULL;
+    } else {
+        PyObject* state = PyTuple_GetItem(globals_locals, 0);
+        PyDict_Update(state, PyTuple_GetItem(globals_locals, 1));
+        return state;
+    }
+}
+
 static PyMemberDef Recording_members[] = {
     {"code", T_OBJECT_EX, offsetof(RecordingObject, code), 0, "Source code executed for this recording"},
     //{"steps", T_OBJECT_EX, offsetof(RecordingObject, steps), 0, "Line executed at each step"},
@@ -141,7 +196,8 @@ static PyMemberDef Recording_members[] = {
 };
 
 static PyMethodDef Recording_methods[] = {
-    {"state", (PyCFunction) Recording_state, METH_VARARGS, "Get state dict for a certain execution step"},
+    {"state", (PyCFunction) Recording_state, METH_VARARGS, "Get state dict at step n"},
+    {"dicts", (PyCFunction) Recording_dicts, METH_VARARGS, "Get globals and locals dicts at step n"},
     {NULL}
 };
 
@@ -196,6 +252,19 @@ void Recording_record(RecordingObject* recording, int event, PyObject* a, PyObje
         case STORE_GLOBAL:
         case STORE_FAST:
         case STORE_NAME:
+        case INPLACE_POWER:
+        case INPLACE_MULTIPLY:
+        case INPLACE_MATRIX_MULTIPLY:
+        case INPLACE_TRUE_DIVIDE:
+        case INPLACE_FLOOR_DIVIDE:
+        case INPLACE_MODULO:
+        case INPLACE_ADD:
+        case INPLACE_SUBTRACT:
+        case INPLACE_LSHIFT:
+        case INPLACE_RSHIFT:
+        case INPLACE_AND:
+        case INPLACE_XOR:
+        case INPLACE_OR:
             track_object(c, (PyObject*)recording);
         case STORE_SUBSCR:
         case STORE_ATTR:

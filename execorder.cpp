@@ -106,7 +106,7 @@ PyObject* check_const(PyObject* obj){
     if(obj == NULL){
         return NULL;
     }
-    
+
     PyObject* const_obj = PyDict_GetItemWithError(consts, obj);
     if(PyErr_Occurred()){
         PyErr_Clear();
@@ -128,28 +128,43 @@ void Execorder_Mutate(PyFrameObject* frame, int opcode, int i, PyObject* a, PyOb
 
     switch(opcode){
         // Name bind
-        case DELETE_NAME:
         case STORE_NAME:                // a[b] = c (b = c in namespace a)
+        case DELETE_NAME:
             name = b;
             break;
-        case DELETE_GLOBAL:
         case STORE_GLOBAL:              // a = c
+        case DELETE_GLOBAL:
             name = a;
             break;
-        case DELETE_FAST:
         case STORE_FAST:                // FASTS[i] = c
+        case DELETE_FAST:
             name = PyTuple_GetItem(frame->f_code->co_varnames, i);
             break;
 
         // Bound object mutates
-        case DELETE_SUBSCR:
         case STORE_SUBSCR:              // a[b] = c
-        case DELETE_ATTR:
+        case DELETE_SUBSCR:
         case STORE_ATTR:                // a.b = c
+        case DELETE_ATTR:
+
+        case INPLACE_POWER:
+        case INPLACE_MULTIPLY:
+        case INPLACE_MATRIX_MULTIPLY:
+        case INPLACE_TRUE_DIVIDE:
+        case INPLACE_FLOOR_DIVIDE:
+        case INPLACE_MODULO:
+        case INPLACE_ADD:
+        case INPLACE_SUBTRACT:
+        case INPLACE_LSHIFT:
+        case INPLACE_RSHIFT:
+        case INPLACE_AND:
+        case INPLACE_XOR:
+        case INPLACE_OR:
             recording = get_recording(frame, true);
             if(recording && recording->tracked_objects.contains(a)){
                 Recording_record(recording, opcode, a, check_const(b), c);
             }
+            break;
     }
 
     if(name != NULL){

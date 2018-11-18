@@ -1418,11 +1418,12 @@ _PyEval_EvalFrameDefault(PyFrameObject *f, int throwflag)
             PyObject *exp = POP();
             PyObject *base = TOP();
             PyObject *res = PyNumber_InPlacePower(base, exp, Py_None);
-            Py_DECREF(base);
-            Py_DECREF(exp);
             SET_TOP(res);
             if (res == NULL)
                 goto error;
+            Execorder_Mutate(f, INPLACE_POWER, 0, base, exp, NULL);
+            Py_DECREF(base);
+            Py_DECREF(exp);
             DISPATCH();
         }
 
@@ -1430,11 +1431,12 @@ _PyEval_EvalFrameDefault(PyFrameObject *f, int throwflag)
             PyObject *right = POP();
             PyObject *left = TOP();
             PyObject *res = PyNumber_InPlaceMultiply(left, right);
-            Py_DECREF(left);
-            Py_DECREF(right);
             SET_TOP(res);
             if (res == NULL)
                 goto error;
+            Execorder_Mutate(f, INPLACE_MULTIPLY, 0, left, right, NULL);
+            Py_DECREF(left);
+            Py_DECREF(right);
             DISPATCH();
         }
 
@@ -1442,11 +1444,12 @@ _PyEval_EvalFrameDefault(PyFrameObject *f, int throwflag)
             PyObject *right = POP();
             PyObject *left = TOP();
             PyObject *res = PyNumber_InPlaceMatrixMultiply(left, right);
-            Py_DECREF(left);
-            Py_DECREF(right);
             SET_TOP(res);
             if (res == NULL)
                 goto error;
+            Execorder_Mutate(f, INPLACE_MATRIX_MULTIPLY, 0, left, right, NULL);
+            Py_DECREF(left);
+            Py_DECREF(right);
             DISPATCH();
         }
 
@@ -1454,11 +1457,12 @@ _PyEval_EvalFrameDefault(PyFrameObject *f, int throwflag)
             PyObject *divisor = POP();
             PyObject *dividend = TOP();
             PyObject *quotient = PyNumber_InPlaceTrueDivide(dividend, divisor);
-            Py_DECREF(dividend);
-            Py_DECREF(divisor);
             SET_TOP(quotient);
             if (quotient == NULL)
                 goto error;
+            Execorder_Mutate(f, INPLACE_TRUE_DIVIDE, 0, dividend, divisor, NULL);
+            Py_DECREF(dividend);
+            Py_DECREF(divisor);
             DISPATCH();
         }
 
@@ -1466,11 +1470,12 @@ _PyEval_EvalFrameDefault(PyFrameObject *f, int throwflag)
             PyObject *divisor = POP();
             PyObject *dividend = TOP();
             PyObject *quotient = PyNumber_InPlaceFloorDivide(dividend, divisor);
-            Py_DECREF(dividend);
-            Py_DECREF(divisor);
             SET_TOP(quotient);
             if (quotient == NULL)
                 goto error;
+            Execorder_Mutate(f, INPLACE_FLOOR_DIVIDE, 0, dividend, divisor, NULL);
+            Py_DECREF(dividend);
+            Py_DECREF(divisor);
             DISPATCH();
         }
 
@@ -1478,11 +1483,12 @@ _PyEval_EvalFrameDefault(PyFrameObject *f, int throwflag)
             PyObject *right = POP();
             PyObject *left = TOP();
             PyObject *mod = PyNumber_InPlaceRemainder(left, right);
-            Py_DECREF(left);
-            Py_DECREF(right);
             SET_TOP(mod);
             if (mod == NULL)
                 goto error;
+            Execorder_Mutate(f, INPLACE_MODULO, 0, left, right, NULL);
+            Py_DECREF(left);
+            Py_DECREF(right);
             DISPATCH();
         }
 
@@ -1498,10 +1504,11 @@ _PyEval_EvalFrameDefault(PyFrameObject *f, int throwflag)
                 sum = PyNumber_InPlaceAdd(left, right);
                 Py_DECREF(left);
             }
-            Py_DECREF(right);
             SET_TOP(sum);
             if (sum == NULL)
                 goto error;
+            Execorder_Mutate(f, INPLACE_ADD, 0, left, right, NULL);
+            Py_DECREF(right);
             DISPATCH();
         }
 
@@ -1509,11 +1516,12 @@ _PyEval_EvalFrameDefault(PyFrameObject *f, int throwflag)
             PyObject *right = POP();
             PyObject *left = TOP();
             PyObject *diff = PyNumber_InPlaceSubtract(left, right);
-            Py_DECREF(left);
-            Py_DECREF(right);
             SET_TOP(diff);
             if (diff == NULL)
                 goto error;
+            Execorder_Mutate(f, INPLACE_SUBTRACT, 0, left, right, NULL);
+            Py_DECREF(left);
+            Py_DECREF(right);
             DISPATCH();
         }
 
@@ -1521,11 +1529,12 @@ _PyEval_EvalFrameDefault(PyFrameObject *f, int throwflag)
             PyObject *right = POP();
             PyObject *left = TOP();
             PyObject *res = PyNumber_InPlaceLshift(left, right);
-            Py_DECREF(left);
-            Py_DECREF(right);
             SET_TOP(res);
             if (res == NULL)
                 goto error;
+            Execorder_Mutate(f, INPLACE_LSHIFT, 0, left, right, NULL);
+            Py_DECREF(left);
+            Py_DECREF(right);
             DISPATCH();
         }
 
@@ -1533,11 +1542,12 @@ _PyEval_EvalFrameDefault(PyFrameObject *f, int throwflag)
             PyObject *right = POP();
             PyObject *left = TOP();
             PyObject *res = PyNumber_InPlaceRshift(left, right);
-            Py_DECREF(left);
-            Py_DECREF(right);
             SET_TOP(res);
             if (res == NULL)
                 goto error;
+            Execorder_Mutate(f, INPLACE_RSHIFT, 0, left, right, NULL);
+            Py_DECREF(left);
+            Py_DECREF(right);
             DISPATCH();
         }
 
@@ -1545,11 +1555,12 @@ _PyEval_EvalFrameDefault(PyFrameObject *f, int throwflag)
             PyObject *right = POP();
             PyObject *left = TOP();
             PyObject *res = PyNumber_InPlaceAnd(left, right);
-            Py_DECREF(left);
-            Py_DECREF(right);
             SET_TOP(res);
             if (res == NULL)
                 goto error;
+            Execorder_Mutate(f, INPLACE_AND, 0, left, right, NULL);
+            Py_DECREF(left);
+            Py_DECREF(right);
             DISPATCH();
         }
 
@@ -1557,11 +1568,12 @@ _PyEval_EvalFrameDefault(PyFrameObject *f, int throwflag)
             PyObject *right = POP();
             PyObject *left = TOP();
             PyObject *res = PyNumber_InPlaceXor(left, right);
-            Py_DECREF(left);
-            Py_DECREF(right);
             SET_TOP(res);
             if (res == NULL)
                 goto error;
+            Execorder_Mutate(f, INPLACE_XOR, 0, left, right, NULL);
+            Py_DECREF(left);
+            Py_DECREF(right);
             DISPATCH();
         }
 
@@ -1569,11 +1581,12 @@ _PyEval_EvalFrameDefault(PyFrameObject *f, int throwflag)
             PyObject *right = POP();
             PyObject *left = TOP();
             PyObject *res = PyNumber_InPlaceOr(left, right);
-            Py_DECREF(left);
-            Py_DECREF(right);
             SET_TOP(res);
             if (res == NULL)
                 goto error;
+            Execorder_Mutate(f, INPLACE_OR, 0, left, right, NULL);
+            Py_DECREF(left);
+            Py_DECREF(right);
             DISPATCH();
         }
 
