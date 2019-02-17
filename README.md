@@ -35,7 +35,7 @@ a = [1, 2, 3]
 a[2] = 'hello'
 a += ['world']
 ```
-Execorder will remember that on the first line we bound an object to the name `a`, and then on the second line we mutated that object by changing on of it's elements, then on the third line we mutated it by appending an item.
+Execorder will remember that on the first line we bound an object to the name `a`, and then on the second line we mutated that object by changing one of it's elements, then on the third line we mutated it by appending an item.
 
 Execorder saves the state of memory at certain 'milestones' in the execution, and between these milestones, records only the specific mutations that happened. By doing this, Execorder can very quickly recover the state of an object at any step of execution (far faster than the original Python code took to run), but also keeps the memory usage relatively low.
 
