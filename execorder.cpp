@@ -6,7 +6,7 @@
 
 #include "ceval.h"
 #include "execorder.h"
-#include "recording.h"
+
 
 auto consts = PyDict_New();
 auto recordings = PyDict_New();
@@ -66,25 +66,20 @@ static RecordingObject* compile_and_exec(PyObject *code_str, RecordingObject* re
     const char* code_utf8 = PyUnicode_AsUTF8(code_str);
     auto filename = PyUnicode_FromFormat("<execorder%d>", exec_num++);
     auto code = (PyCodeObject*)Py_CompileStringObject(code_utf8, filename, Py_file_input, NULL, -1);
-    if(PyErr_Occurred()){
-        return NULL;
-    } else {
+    if(!PyErr_Occurred()){
+        // Save recording object so it is accessible from elsewhere
         PyDict_SetItem(recordings, filename, (PyObject*)recording);
+
+        // exec(code, globals(), {})
+        auto globals = PyDict_New();
+        PyDict_SetItemString(globals, "__builtins__", PyEval_GetBuiltins());
+        PyEval_EvalCode((PyObject*)code, globals, NULL);
+
+        Py_DECREF(globals);
+        PyDict_DelItem(recordings, filename);
     }
 
-    // exec(code, globals(), {})
-    auto globals = PyDict_New();
-    PyDict_SetItemString(globals, "__builtins__", PyEval_GetBuiltins());
-    PyEval_EvalCode((PyObject*)code, globals, NULL);
-
-    Py_DECREF(globals);
-    PyDict_DelItem(recordings, filename);
-    
-    if(PyErr_Occurred()){
-        // TODO: consider option/flag to still return (partial) recording here
-        return NULL;
-    }
-    return recording;
+    return NULL;    // TODO: change to void
 }
 
 static PyObject* exec(PyObject *self, PyObject *args){
@@ -103,15 +98,44 @@ static PyObject* exec(PyObject *self, PyObject *args){
         recording->interpreter->eval_frame = _PyEval_EvalFrameDefault;
         
         PyEval_SetTrace(recording->trace_func, NULL);       // Start tracing
-        recording = compile_and_exec(code_str, recording);
-        PyEval_SetTrace(NULL, NULL);                        // Stop tracing
+        
+        // Execute the user supplied code
+        compile_and_exec(code_str, recording);
+        
+        recording->trace_func = NULL;                       // Stop tracing
+        PyEval_SetTrace(recording->trace_func, NULL);
 
         // Put eval_frame back
         recording->interpreter->eval_frame = recording->real_eval_frame;
-        
+
+        if(PyErr_Occurred()){
+            PyObject *type, *value, *traceback;
+            PyErr_Fetch(&type, &value, &traceback);
+            do_callback(recording);
+            PyErr_Restore(type, value, traceback);
+            return NULL; 
+        }
         return (PyObject*)recording;
     }
     return NULL;
+}
+
+void do_callback(RecordingObject* recording){
+    //printf("Callback %p\n", recording->callback);
+    if(PyCallable_Check(recording->callback)){
+        auto args = Py_BuildValue("(O)", recording);
+
+        // Restore Python's normal eval_frame function
+        auto eval_frame = recording->interpreter->eval_frame;
+        recording->interpreter->eval_frame = recording->real_eval_frame;
+
+        PyEval_SetTrace(NULL, NULL);                    // Stop tracing
+        PyEval_CallObject(recording->callback, args);   // Call into to user code
+        PyEval_SetTrace(recording->trace_func, NULL);   // Start tracing again
+        
+        // Go back to adjusted version of eval_frame
+        recording->interpreter->eval_frame = eval_frame;
+    }
 }
 
 // If an object is immutable (well, hashable) then save it and use that object always in recordings

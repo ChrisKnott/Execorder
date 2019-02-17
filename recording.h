@@ -9,6 +9,7 @@ using ObjectSet = spp::sparse_hash_set<PyObject*>;
 using PickleOrder = std::vector<PyObject*>;
 using Milestone = std::tuple<MutationList*, PickleOrder*, PyObject*>;
 
+// ==== class Recording ====================
 typedef struct {
     PyObject_HEAD
     PyObject*               code;
@@ -17,6 +18,7 @@ typedef struct {
     PyInterpreterState*     interpreter;
     _PyFrameEvalFunction    real_eval_frame;
     Py_tracefunc            trace_func;
+    PyObject*               error;
 
     int                     callback_counter;
     bool                    new_milestone;    

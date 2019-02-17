@@ -5,7 +5,7 @@ import random
 
 random.seed(1231231)
 
-X = [random.randint(0, 100) for n in range(500)]
+X = [random.randint(0, 100) for n in range(100)]
 
 done = False
 while not done:
@@ -23,7 +23,10 @@ def callback(recording):
     print('User code')
 
 start = time.process_time()
-exec(code, {})
+try:
+	exec(code, {})
+except:
+	pass
 normal_time = time.process_time() - start
 print('Normal exec:   %.5f' % normal_time)
 

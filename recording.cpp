@@ -1,6 +1,5 @@
 #include "Python.h"
 #include "execorder.h"
-#include "recording.h"
 #include "structmember.h"
 #include "opcode.h"
 
@@ -51,6 +50,8 @@ static PyObject* Recording_new(PyTypeObject *type, PyObject *args, PyObject *kwd
 }
 
 static void inplace_opcode(int opcode, ObjectMap& objects, PyObject* a, PyObject* b){
+    // TODO: finish this
+
     PyObject* obj = objects[b];
     obj = obj ? obj : b;
 
@@ -191,6 +192,24 @@ static PyObject* Recording_state(PyObject *self, PyObject *args){
     }
 }
 
+static PyObject* Recording_steps(PyObject *self, PyObject *args){
+    if (PyArg_UnpackTuple(args, "steps", 0, 0)) {
+        RecordingObject* recording = (RecordingObject*)self;
+        return PyLong_FromLong(recording->steps.size());
+    }
+}
+
+static PyObject* Recording_line(PyObject *self, PyObject *args){
+    PyObject* n_obj;
+    if (PyArg_UnpackTuple(args, "line", 1, 1, &n_obj)) {
+        RecordingObject* recording = (RecordingObject*)self;
+        auto n = PyLong_AsLong(n_obj);
+        auto step = recording->steps[n];
+        auto line = std::get<0>(step);
+        return PyLong_FromLong(line);
+    }
+}
+
 static PyMemberDef Recording_members[] = {
     {"code", T_OBJECT_EX, offsetof(RecordingObject, code), 0, "Source code executed for this recording"},
     //{"steps", T_OBJECT_EX, offsetof(RecordingObject, steps), 0, "Line executed at each step"},
@@ -200,6 +219,8 @@ static PyMemberDef Recording_members[] = {
 static PyMethodDef Recording_methods[] = {
     {"state", (PyCFunction) Recording_state, METH_VARARGS, "Get state dict at step n"},
     {"dicts", (PyCFunction) Recording_dicts, METH_VARARGS, "Get globals and locals dicts at step n"},
+    {"steps", (PyCFunction) Recording_steps, METH_VARARGS, "Get total number of steps in recording"},
+    {"line",  (PyCFunction) Recording_line,  METH_VARARGS, "Get the line that was executed at step n"},
     {NULL}
 };
 
@@ -310,20 +331,7 @@ RecordingObject* Recording_record(  RecordingObject* recording, int event,
     // We haven't called back in a while, do it now
     if(recording->callback && recording->callback_counter >= 50000){
         recording->callback_counter = 0;
-        if(PyCallable_Check(recording->callback)){
-            auto args = Py_BuildValue("(O)", recording);
-
-            // Restore Python's normal eval_frame function
-            auto eval_frame = recording->interpreter->eval_frame;
-            recording->interpreter->eval_frame = recording->real_eval_frame;
-
-            PyEval_SetTrace(NULL, NULL);                    // Stop tracing
-            PyEval_CallObject(recording->callback, args);   // Call into to user code
-            PyEval_SetTrace(recording->trace_func, NULL);   // Start tracing again
-            
-            // Go back to adjusted version of eval_frame
-            recording->interpreter->eval_frame = eval_frame;
-        }
+        do_callback(recording);
     }
 
     return recording;
