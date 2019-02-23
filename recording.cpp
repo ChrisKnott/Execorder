@@ -1,7 +1,10 @@
 #include "Python.h"
-#include "execorder.h"
 #include "structmember.h"
 #include "opcode.h"
+
+#include "execorder.h"
+#include "recording.h"
+#include "visit_list.h"
 
 using ObjectMap = spp::sparse_hash_map<PyObject*, PyObject*>;
 auto io_module = PyImport_ImportModule("io");
@@ -14,6 +17,7 @@ auto bytesio_str = PyUnicode_FromString("BytesIO");
 static void Recording_dealloc(RecordingObject *self){
     Py_DECREF(self->pickler);
     Py_DECREF(self->code);
+    Py_DECREF(self->visits);
     self->pickle_order = NULL;
 
     MutationList* mutations; PickleOrder* pickle_order; PyObject* pickle_bytes;
@@ -44,6 +48,7 @@ static PyObject* Recording_new(PyTypeObject *type, PyObject *args, PyObject *kwd
     auto self = (RecordingObject *) type->tp_alloc(type, 0);
     self->tracked_objects = ObjectSet();
     self->steps.reserve(1000);
+    self->visits = PyList_New(0);
     self->callback_counter = 0;
     new_milestone(self);
     return (PyObject*) self;
@@ -210,17 +215,33 @@ static PyObject* Recording_line(PyObject *self, PyObject *args){
     }
 }
 
+static PyObject* Recording_visits(PyObject *self, PyObject *args){
+    PyObject* l_obj;
+    if (PyArg_UnpackTuple(args, "visits", 1, 1, &l_obj)) {
+        //auto visit_list = VisitList_New((RecordingObject*)self, l_obj);
+        auto line_num = PyLong_AsLong(l_obj);
+        auto recording = (RecordingObject*)self;
+        if(line_num <= 0 || line_num > PyList_Size(recording->visits)){
+            return PyList_New(0);
+        } else {
+            auto visit_list = PyList_GetItem(recording->visits, PyLong_AsSsize_t(l_obj) - 1);
+            Py_INCREF(visit_list);
+            return visit_list;
+        }
+    }
+}
+
 static PyMemberDef Recording_members[] = {
     {"code", T_OBJECT_EX, offsetof(RecordingObject, code), 0, "Source code executed for this recording"},
-    //{"steps", T_OBJECT_EX, offsetof(RecordingObject, steps), 0, "Line executed at each step"},
     {NULL}
 };
 
 static PyMethodDef Recording_methods[] = {
-    {"state", (PyCFunction) Recording_state, METH_VARARGS, "Get state dict at step n"},
-    {"dicts", (PyCFunction) Recording_dicts, METH_VARARGS, "Get globals and locals dicts at step n"},
-    {"steps", (PyCFunction) Recording_steps, METH_VARARGS, "Get total number of steps in recording"},
-    {"line",  (PyCFunction) Recording_line,  METH_VARARGS, "Get the line that was executed at step n"},
+    {"state",  (PyCFunction) Recording_state,  METH_VARARGS, "Get state dict at step n"},
+    {"dicts",  (PyCFunction) Recording_dicts,  METH_VARARGS, "Get globals and locals dicts at step n"},
+    {"steps",  (PyCFunction) Recording_steps,  METH_VARARGS, "Get total number of steps in recording"},
+    {"line",   (PyCFunction) Recording_line,   METH_VARARGS, "Get the line that was executed at step n"},
+    {"visits", (PyCFunction) Recording_visits, METH_VARARGS, "Get list of steps that visit line l"},
     {NULL}
 };
 
@@ -308,7 +329,20 @@ RecordingObject* Recording_record(  RecordingObject* recording, int event,
         case PyTrace_RETURN:
             auto frame = (PyFrameObject*)a;
             int line_number = frame->f_lineno;
+
+            // Save step number for this line visit
+            while(PyList_Size(recording->visits) < line_number){
+                auto new_list = PyList_New(0);
+                PyList_Append(recording->visits, new_list);
+                Py_DECREF(new_list);
+            }
+            auto visit_list = PyList_GetItem(recording->visits, line_number - 1);
+            auto step = PyLong_FromLong(recording->steps.size());
+            PyList_Append(visit_list, step);
+
+            // Save line number for this step
             recording->steps.push_back(Step(line_number, event, frame));
+
             if(recording->callback){
                 recording->callback_counter++;
             }
@@ -327,9 +361,9 @@ RecordingObject* Recording_record(  RecordingObject* recording, int event,
         return NULL;
     }
 
-    // TODO: make this customisable, based on time as well
     // We haven't called back in a while, do it now
     if(recording->callback && recording->callback_counter >= 50000){
+        // TODO: make this customisable, based on time as well
         recording->callback_counter = 0;
         do_callback(recording);
     }

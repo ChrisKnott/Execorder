@@ -6,7 +6,8 @@
 
 #include "ceval.h"
 #include "execorder.h"
-
+#include "recording.h"
+//#include "visit_list.h"
 
 auto consts = PyDict_New();
 auto recordings = PyDict_New();
@@ -233,7 +234,12 @@ PyObject *PyInit_execorder(void) {
     PyType_Ready(recording_type);
     Py_INCREF(recording_type);
     PyModule_AddObject(module, "Recording", (PyObject*)recording_type);
-
+/*
+    auto visit_list_type = VisitList_Type();
+    PyType_Ready(visit_list_type);
+    Py_INCREF(visit_list_type);
+    PyModule_AddObject(module, "VisitList", (PyObject*)visit_list_type);
+*/
     return module;
 }
 

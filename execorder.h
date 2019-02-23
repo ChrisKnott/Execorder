@@ -1,3 +1,4 @@
+#pragma once
 #include "Python.h"
 #include "frameobject.h"
 #include "recording.h"

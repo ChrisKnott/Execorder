@@ -1,4 +1,6 @@
+#pragma once
 #include "Python.h"
+#include "frameobject.h"
 #include <vector>
 #include "sparsepp/spp.h"
 
@@ -24,6 +26,7 @@ typedef struct {
     bool                    new_milestone;    
     PyObject*               global_frame;
     std::vector<Step>       steps;
+    PyObject*               visits;
     std::vector<Milestone>  milestones;
     ObjectSet               tracked_objects;
     
