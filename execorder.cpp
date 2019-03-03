@@ -7,7 +7,6 @@
 #include "ceval.h"
 #include "execorder.h"
 #include "recording.h"
-//#include "visit_list.h"
 
 auto consts = PyDict_New();
 auto recordings = PyDict_New();
@@ -139,7 +138,8 @@ void do_callback(RecordingObject* recording){
     }
 }
 
-// If an object is immutable (well, hashable) then save it and use that object always in recordings
+// If an object is immutable (well, hashable) then save it and use that object always in 
+// recordings. This is an important optimisation for nested loops that reuse numbers a lot
 PyObject* check_const(PyObject* obj){
     if(obj == NULL){
         return NULL;
@@ -206,9 +206,10 @@ void Execorder_Mutate(PyFrameObject* frame, int opcode, int i, PyObject* a, PyOb
     }
 
     if(name != NULL){
+    	// New binding - record it. 
         recording = get_recording(frame, false);
         if(recording != NULL){
-            PyObject* named_obj = check_const(c);
+            PyObject* named_obj = check_const(c);	// 'c' is the object bound to the new name
             Recording_record(recording, opcode, (PyObject*)frame, name, named_obj);
         }   
     }

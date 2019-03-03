@@ -4,7 +4,6 @@
 
 #include "execorder.h"
 #include "recording.h"
-#include "visit_list.h"
 
 using ObjectMap = spp::sparse_hash_map<PyObject*, PyObject*>;
 auto io_module = PyImport_ImportModule("io");
@@ -55,9 +54,7 @@ static PyObject* Recording_new(PyTypeObject *type, PyObject *args, PyObject *kwd
 }
 
 static void inplace_opcode(int opcode, ObjectMap& objects, PyObject* a, PyObject* b){
-    // TODO: finish this
-
-    PyObject* obj = objects[b];
+    PyObject* obj = objects[b];     // a is definitely stored, b might be
     obj = obj ? obj : b;
 
     switch(opcode){
@@ -65,19 +62,40 @@ static void inplace_opcode(int opcode, ObjectMap& objects, PyObject* a, PyObject
             objects[a] = PyNumber_InPlacePower(objects[a], obj, Py_None);
             break;
         case INPLACE_MULTIPLY:
+            objects[a] = PyNumber_InPlaceMultiply(objects[a], obj);
+            break;
         case INPLACE_MATRIX_MULTIPLY:
+            objects[a] = PyNumber_InPlaceMatrixMultiply(objects[a], obj);
+            break;
         case INPLACE_TRUE_DIVIDE:
+            objects[a] = PyNumber_InPlaceTrueDivide(objects[a], obj);
+            break;
         case INPLACE_FLOOR_DIVIDE:
+            objects[a] = PyNumber_InPlaceFloorDivide(objects[a], obj);
+            break;
         case INPLACE_MODULO:
+            objects[a] = PyNumber_InPlaceRemainder(objects[a], obj);
+            break;
         case INPLACE_ADD:
             objects[a] = PyNumber_InPlaceAdd(objects[a], obj);
             break;
         case INPLACE_SUBTRACT:
+            objects[a] = PyNumber_InPlaceSubtract(objects[a], obj);
+            break;
         case INPLACE_LSHIFT:
+            objects[a] = PyNumber_InPlaceLshift(objects[a], obj);
+            break;
         case INPLACE_RSHIFT:
+            objects[a] = PyNumber_InPlaceRshift(objects[a], obj);
+            break;
         case INPLACE_AND:
+            objects[a] = PyNumber_InPlaceAnd(objects[a], obj);
+            break;
         case INPLACE_XOR:
+            objects[a] = PyNumber_InPlaceXor(objects[a], obj);
+            break;
         case INPLACE_OR:
+            objects[a] = PyNumber_InPlaceOr(objects[a], obj);
             break;
     }
 }

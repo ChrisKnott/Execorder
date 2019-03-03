@@ -10,7 +10,7 @@ execorder = Extension(
 
 setup(
     name='Execorder',
-    version='0.2.0',
+    version='0.2.1',
     description="Provides a new exec() function which records the execution",
     ext_modules=[execorder]
 )

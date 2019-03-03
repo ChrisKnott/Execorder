@@ -26,7 +26,7 @@ typedef struct {
     bool                    new_milestone;    
     PyObject*               global_frame;
     std::vector<Step>       steps;
-    PyObject*               visits;
+    PyObject*               visits;			// Use Python list because user can access
     std::vector<Milestone>  milestones;
     ObjectSet               tracked_objects;
     
