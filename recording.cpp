@@ -372,13 +372,6 @@ RecordingObject* Recording_record(  RecordingObject* recording, int event,
         new_milestone(recording);
     }
 
-    // We have exceeded the specified number of execution steps, exit
-    int current_steps = (int)recording->steps.size();
-    if(recording->max_steps && current_steps >= recording->max_steps){
-        PyErr_SetString(PyExc_RuntimeError, "Reached maximum execution steps");
-        return NULL;
-    }
-
     // We haven't called back in a while, do it now
     if(recording->callback && recording->callback_counter >= 50000){
         // TODO: make this customisable, based on time as well
@@ -386,7 +379,17 @@ RecordingObject* Recording_record(  RecordingObject* recording, int event,
         do_callback(recording);
     }
 
-    return recording;
+    // We have exceeded the specified number of execution steps, exit
+    int current_steps = (int)recording->steps.size();
+    if(recording->max_steps && current_steps >= recording->max_steps){
+        PyErr_SetString(PyExc_RuntimeError, "Reached maximum execution steps");
+    }
+
+    if(PyErr_Occurred()){
+        return NULL;
+    } else {
+        return recording;
+    }
 }
 
 

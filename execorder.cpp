@@ -46,7 +46,7 @@ static int trace(PyObject *obj, PyFrameObject *frame, int what, PyObject *arg){
             PyObject *key, *value; Py_ssize_t pos = 0;
             for(auto& dict : dicts){
                 while(PyDict_Next(dict, &pos, &key, &value)) {
-                    Recording_record(recording, STORE_NAME, (PyObject*)frame, key, value);
+                    Recording_record(recording, opcode, (PyObject*)frame, key, value);
                     opcode = STORE_NAME;
                 }
             }
@@ -121,7 +121,6 @@ static PyObject* exec(PyObject *self, PyObject *args){
 }
 
 void do_callback(RecordingObject* recording){
-    //printf("Callback %p\n", recording->callback);
     if(PyCallable_Check(recording->callback)){
         auto args = Py_BuildValue("(O)", recording);
 
@@ -131,10 +130,14 @@ void do_callback(RecordingObject* recording){
 
         PyEval_SetTrace(NULL, NULL);                    // Stop tracing
         PyEval_CallObject(recording->callback, args);   // Call into to user code
-        PyEval_SetTrace(recording->trace_func, NULL);   // Start tracing again
-        
-        // Go back to adjusted version of eval_frame
-        recording->interpreter->eval_frame = eval_frame;
+
+        if(!PyErr_Occurred()){
+            // Start tracing again
+            PyEval_SetTrace(recording->trace_func, NULL);
+        }
+             // Go back to adjusted version of eval_frame
+            recording->interpreter->eval_frame = eval_frame;
+        //}
     }
 }
 
