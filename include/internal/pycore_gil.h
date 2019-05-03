@@ -4,11 +4,15 @@
 extern "C" {
 #endif
 
-#include "pyatomic.h"
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_BUILTIN)
+#  error "this header requires Py_BUILD_CORE or Py_BUILD_CORE_BUILTIN define"
+#endif
 
-#include "internal/condvar.h"
+#include "pycore_condvar.h"
+#include "pycore_atomic.h"
+
 #ifndef Py_HAVE_CONDVAR
-#error You need either a POSIX-compatible or a Windows system!
+#  error You need either a POSIX-compatible or a Windows system!
 #endif
 
 /* Enable if you want to force the switching of threads at least

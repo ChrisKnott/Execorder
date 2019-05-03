@@ -1,3 +1,5 @@
+#define Py_BUILD_CORE
+
 #include "Python.h"
 #include "structmember.h"
 #include "opcode.h"

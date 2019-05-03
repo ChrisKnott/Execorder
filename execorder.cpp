@@ -1,8 +1,12 @@
 #define Py_BUILD_CORE
-#include <Python.h>
+
+#include "Python.h"
 #include "frameobject.h"
-#include "pystate.h"
+//#include "pystate.h"
+//#include "internal/pystate.h"
+#include "internal/gil.h"
 #include "opcode.h"
+#include "condvar.h"
 
 #include "ceval.h"
 #include "execorder.h"
