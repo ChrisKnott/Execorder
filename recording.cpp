@@ -99,6 +99,8 @@ static void inplace_opcode(int opcode, ObjectMap& objects, PyObject* a, PyObject
         case INPLACE_OR:
             objects[a] = PyNumber_InPlaceOr(objects[a], obj);
             break;
+        default:
+            printf("UNKNOWN OPCODE\n");
     }
 }
 
@@ -180,21 +182,8 @@ static PyObject* Recording_dicts(PyObject *self, PyObject *args){
                         }
                         break;
 
-                    case INPLACE_POWER:
-                    case INPLACE_MULTIPLY:
-                    case INPLACE_MATRIX_MULTIPLY:
-                    case INPLACE_TRUE_DIVIDE:
-                    case INPLACE_FLOOR_DIVIDE:
-                    case INPLACE_MODULO:
-                    case INPLACE_ADD:
-                    case INPLACE_SUBTRACT:
-                    case INPLACE_LSHIFT:
-                    case INPLACE_RSHIFT:
-                    case INPLACE_AND:
-                    case INPLACE_XOR:
-                    case INPLACE_OR:
+                    default:
                         inplace_opcode(op, objects, a, b);
-                        break;
                 }
             } else {
                 break;
@@ -311,7 +300,7 @@ int track_object(PyObject* obj, PyObject* args){
 
 // Adds an event to a recording
 RecordingObject* Recording_record(  RecordingObject* recording, int event, 
-                                    PyObject* a, PyObject* b, PyObject* c){
+                                    PyObject* a, PyObject* b, PyObject* c  ){
     Mutation mutation;
     switch(event){
         case STORE_GLOBAL:

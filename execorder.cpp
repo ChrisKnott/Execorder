@@ -65,16 +65,15 @@ static int trace(PyObject *obj, PyFrameObject *frame, int what, PyObject *arg){
     return 0;
 }
 
-static RecordingObject* compile_and_exec(PyObject *code_str, RecordingObject* recording){
-    // code = compile(code_str, '<execorder123>', 'exec')
+static void compile_and_exec(PyObject *code_str, RecordingObject* recording){
     const char* code_utf8 = PyUnicode_AsUTF8(code_str);
     auto filename = PyUnicode_FromFormat("<execorder%d>", exec_num++);
     auto code = (PyCodeObject*)Py_CompileStringObject(code_utf8, filename, Py_file_input, NULL, -1);
+    
     if(!PyErr_Occurred()){
         // Save recording object so it is accessible from elsewhere
         PyDict_SetItem(recordings, filename, (PyObject*)recording);
 
-        // exec(code, globals(), {})
         auto globals = PyDict_New();
         PyDict_SetItemString(globals, "__builtins__", PyEval_GetBuiltins());
         PyEval_EvalCode((PyObject*)code, globals, NULL);
@@ -82,8 +81,6 @@ static RecordingObject* compile_and_exec(PyObject *code_str, RecordingObject* re
         Py_DECREF(globals);
         PyDict_DelItem(recordings, filename);
     }
-
-    return NULL;    // TODO: change to void
 }
 
 static PyObject* exec(PyObject *self, PyObject *args){
@@ -133,15 +130,11 @@ void do_callback(RecordingObject* recording){
         recording->interpreter->eval_frame = recording->real_eval_frame;
 
         PyEval_SetTrace(NULL, NULL);                    // Stop tracing
-        PyEval_CallObject(recording->callback, args);   // Call into to user code
+        PyEval_CallObject(recording->callback, args);   // Call into to user code        
+        PyEval_SetTrace(recording->trace_func, NULL);   // Start tracing again
 
-        if(!PyErr_Occurred()){
-            // Start tracing again
-            PyEval_SetTrace(recording->trace_func, NULL);
-        }
-             // Go back to adjusted version of eval_frame
-            recording->interpreter->eval_frame = eval_frame;
-        //}
+         // Go back to adjusted version of eval_frame
+        recording->interpreter->eval_frame = eval_frame;
     }
 }
 
@@ -242,12 +235,7 @@ PyObject *PyInit_execorder(void) {
     PyType_Ready(recording_type);
     Py_INCREF(recording_type);
     PyModule_AddObject(module, "Recording", (PyObject*)recording_type);
-/*
-    auto visit_list_type = VisitList_Type();
-    PyType_Ready(visit_list_type);
-    Py_INCREF(visit_list_type);
-    PyModule_AddObject(module, "VisitList", (PyObject*)visit_list_type);
-*/
+
     return module;
 }
 
