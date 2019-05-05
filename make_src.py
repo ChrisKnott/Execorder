@@ -44,25 +44,22 @@ with open(os.path.join(src_folder, 'Python/ceval.c'), encoding='utf8') as ceval_
         else:
             print('NOT FOUND:', start)
 
-extern = '''
+i = code.find('#include "frameobject.h"')
+i = code.find('\n\n', i) + 1
+code = code[:i] + '''
+void Execorder_Mutate(PyFrameObject*, int, int, PyObject*, PyObject*, PyObject*);
+''' + code[i:]
+
+extern = '''//===================================================================
 // This is a near-exact copy of ceval.c, with calls to Execorder_Mutate()
 // added so that we can efficiently record mutations of objects
+//===================================================================
 
 #define Py_BUILD_CORE
-#include "execorder.h"
-extern "C" {
-
-//=====================================================================================
-//==================================== ceval.c ========================================
-//=====================================================================================
-
-%s
-
-} // extern "C"
 '''
 
-with open('ceval.cpp', 'w', encoding='utf8') as ceval_file:
-    ceval_file.write(extern % code)
+with open('ceval.c', 'w', encoding='utf8') as ceval_file:
+    ceval_file.write(extern + code)
 
 # === Copy necessary headers ===================================================
 
@@ -73,4 +70,3 @@ os.makedirs('include_py', exist_ok=True)
 shutil.copy(os.path.join(src_folder, 'PC/pyconfig.h'), 'include_py/pyconfig.h')
 shutil.copy(os.path.join(src_folder, 'Python/condvar.h'), 'include_py/condvar.h')
 shutil.copy(os.path.join(src_folder, 'Python/ceval_gil.h'), 'include_py/ceval_gil.h')
-

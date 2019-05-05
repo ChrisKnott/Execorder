@@ -4,17 +4,11 @@
 extern "C" {
 #endif
 
-#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_BUILTIN)
-#  error "this header requires Py_BUILD_CORE or Py_BUILD_CORE_BUILTIN define"
-#endif
-
-#include "pycore_atomic.h"
+#include "pyatomic.h"
 #include "pythread.h"
 
-PyAPI_FUNC(void) _Py_FinishPendingCalls(void);
-
 struct _pending_calls {
-    int finishing;
+    unsigned long main_thread;
     PyThread_type_lock lock;
     /* Request for running pending calls. */
     _Py_atomic_int calls_to_do;
@@ -31,7 +25,7 @@ struct _pending_calls {
     int last;
 };
 
-#include "pycore_gil.h"
+#include "internal/gil.h"
 
 struct _ceval_runtime_state {
     int recursion_limit;
@@ -47,8 +41,6 @@ struct _ceval_runtime_state {
     /* Request for dropping the GIL */
     _Py_atomic_int gil_drop_request;
     struct _pending_calls pending;
-    /* Request for checking signals. */
-    _Py_atomic_int signals_pending;
     struct _gil_runtime_state gil;
 };
 

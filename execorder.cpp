@@ -1,20 +1,17 @@
 #define Py_BUILD_CORE
 
 #include "Python.h"
-#include "frameobject.h"
-//#include "pystate.h"
-//#include "internal/pystate.h"
-#include "internal/gil.h"
-#include "opcode.h"
-#include "condvar.h"
 
-#include "ceval.h"
 #include "execorder.h"
 #include "recording.h"
+
+#include "opcode.h"
 
 auto consts = PyDict_New();
 auto recordings = PyDict_New();
 int exec_num = 0;
+
+void do_callback(RecordingObject*);
 
 RecordingObject* get_recording(PyFrameObject* frame, bool backtrack){
     while(frame != NULL){

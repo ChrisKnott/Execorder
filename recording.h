@@ -1,9 +1,8 @@
 #pragma once
 #include "Python.h"
-#include "frameobject.h"
+//#include "frameobject.h"
 #include <vector>
 #include "sparsepp/spp.h"
-#include "pycore_pystate.h"
 
 using Step = std::tuple<int, int, PyFrameObject*>;
 using Mutation = std::tuple<int, unsigned char, PyObject*, PyObject*, PyObject*>;

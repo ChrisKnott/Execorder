@@ -2,10 +2,11 @@ from setuptools import setup, Extension
 
 execorder = Extension(
     'execorder',
-    sources=['execorder.cpp', 'ceval.cpp', 'recording.cpp'],
-    extra_compile_args=['/std:c++14'], #, '-O3'],
-    include_dirs=['include', 'include_py', 'include/internal'],
-    py_limited_api=False
+    sources=['execorder.cpp', 'ceval.c', 'recording.cpp'],
+    extra_compile_args=['/std:c++14'],
+    include_dirs=['include', 'include_py'], #, 'include/internal', 'win32'],
+    py_limited_api=False,
+    language='c++'
 )
 
 setup(

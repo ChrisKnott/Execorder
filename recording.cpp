@@ -1,4 +1,5 @@
 #define Py_BUILD_CORE
+#define NOMINMAX
 
 #include "Python.h"
 #include "structmember.h"
@@ -209,7 +210,7 @@ static PyObject* Recording_state(PyObject *self, PyObject *args){
 static PyObject* Recording_steps(PyObject *self, PyObject *args){
     if (PyArg_UnpackTuple(args, "steps", 0, 0)) {
         RecordingObject* recording = (RecordingObject*)self;
-        return PyLong_FromLong(recording->steps.size());
+        return PyLong_FromLong((long)recording->steps.size());
     }
 }
 
@@ -253,19 +254,61 @@ static PyMethodDef Recording_methods[] = {
     {"visits", (PyCFunction) Recording_visits, METH_VARARGS, "Get list of steps that visit line l"},
     {NULL}
 };
-
+/*
+static PyTypeObject RecordingType = {
+//    PyVarObject_HEAD_INIT(NULL, 0)
+//    .tp_name = "execorder.Recording",
+//    .tp_doc = "A recording of the execution of some code",
+//    .tp_basicsize = sizeof(RecordingObject),
+//    .tp_itemsize = 0,
+//    .tp_flags = Py_TPFLAGS_DEFAULT,
+//    .tp_members = Recording_members,
+//    .tp_methods = Recording_methods,
+//    .tp_dealloc = (destructor) Recording_dealloc,
+//    .tp_new = Recording_new,
+};
+*/
 static PyTypeObject RecordingType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "execorder.Recording",
-    .tp_doc = "A recording of the execution of some code",
-    .tp_basicsize = sizeof(RecordingObject),
-    .tp_itemsize = 0,
-    .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_members = Recording_members,
-    .tp_methods = Recording_methods,
-    .tp_dealloc = (destructor) Recording_dealloc,
-    .tp_new = Recording_new,
+    "execorder.Recording",
+    sizeof(RecordingObject),
+    0,
+    (destructor) Recording_dealloc,             /* tp_dealloc */
+    0,                                          /* tp_print */
+    0,                                          /* tp_getattr */
+    0,                                          /* tp_setattr */
+    0,                                          /* tp_reserved */
+    0,                                          /* tp_repr */
+    0,                                          /* tp_as_number */
+    0,                                          /* tp_as_sequence */
+    0,                                          /* tp_as_mapping */
+    0,                                          /* tp_hash */
+    0,                                          /* tp_call */
+    0,                                          /* tp_str */
+    0,                                          /* tp_getattro */
+    0,                                          /* tp_setattro */
+    0,                                          /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,                         /* tp_flags */
+    "A recording of an execution of some code", /* tp_doc */
+    0,                                          /* tp_traverse */
+    0,                                          /* tp_clear */
+    0,                                          /* tp_richcompare */
+    0,                                          /* tp_weaklistoffset */
+    0,                                          /* tp_iter */
+    0,                                          /* tp_iternext */
+    Recording_methods,                          /* tp_methods */
+    Recording_members,                          /* tp_members */
+    0,                                          /* tp_getset */
+    0,                                          /* tp_base */
+    0,                                          /* tp_dict */
+    0,                                          /* tp_descr_get */
+    0,                                          /* tp_descr_set */
+    0,                                          /* tp_dictoffset */
+    0,                                          /* tp_init */
+    0,                                          /* tp_alloc */
+    Recording_new,                              /* tp_new */
 };
+
 
 PyTypeObject* Recording_Type(){
     return &RecordingType;
@@ -346,7 +389,7 @@ RecordingObject* Recording_record(  RecordingObject* recording, int event,
                 Py_DECREF(new_list);
             }
             auto visit_list = PyList_GetItem(recording->visits, line_number - 1);
-            auto step = PyLong_FromLong(recording->steps.size());
+            auto step = PyLong_FromLong((long)recording->steps.size());
             PyList_Append(visit_list, step);
 
             // Save line number for this step
@@ -367,7 +410,7 @@ RecordingObject* Recording_record(  RecordingObject* recording, int event,
     if(recording->callback && recording->callback_counter >= 50000){
         // TODO: make this customisable, based on time as well
         recording->callback_counter = 0;
-        do_callback(recording);
+        // TODO: think about this... do_callback(recording);
     }
 
     // We have exceeded the specified number of execution steps, exit
