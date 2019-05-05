@@ -4,6 +4,7 @@
 
 #include "execorder.h"
 #include "recording.h"
+#include "dictobject.h"
 
 using ObjectMap = spp::sparse_hash_map<PyObject*, PyObject*>;
 auto io_module = PyImport_ImportModule("io");
@@ -12,6 +13,8 @@ auto pickler_str = PyUnicode_FromString("Pickler");
 auto unpickler_str = PyUnicode_FromString("Unpickler");
 auto dump_str = PyUnicode_FromString("dump");
 auto bytesio_str = PyUnicode_FromString("BytesIO");
+
+auto a = _PyDict_LoadGlobal(NULL, NULL, NULL);
 
 static void Recording_dealloc(RecordingObject *self){
     Py_DECREF(self->pickler);
