@@ -4,6 +4,7 @@
 #include "Python.h"
 #include "structmember.h"
 #include "opcode.h"
+//#include "moduleobject.h"
 
 #include "execorder.h"
 #include "recording.h"
