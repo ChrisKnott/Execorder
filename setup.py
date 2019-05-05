@@ -4,10 +4,9 @@ execorder = Extension(
     'execorder',
     sources=['execorder.cpp', 'recording.cpp', 'ceval.c'],
     extra_compile_args=['/std:c++14'],
-    include_dirs=['include', 'include_py'], #, 'include/internal', 'win32'],
+    include_dirs=['include', 'include_py'], 
     libraries=['python37'],
     py_limited_api=False,
-    #language='c++'
 )
 
 setup(

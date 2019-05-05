@@ -4,6 +4,7 @@
 //===================================================================
 
 #define Py_BUILD_CORE
+//__declspec(dllimport)
 
 /* Execute compiled code */
 
@@ -5206,3 +5207,4 @@ maybe_dtrace_line(PyFrameObject *frame,
     }
     *instr_prev = frame->f_lasti;
 }
+
