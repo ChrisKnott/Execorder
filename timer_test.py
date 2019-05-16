@@ -1,11 +1,11 @@
-import execorder, time
+import time
 
 code = '''
 import random
 
-random.seed(1231231)
+random.seed(123)
 
-X = [random.randint(0, 100) for n in range(100)]
+X = [random.randint(0, 100) for n in range(2000)]
 
 done = False
 while not done:
@@ -18,20 +18,19 @@ while not done:
                 X[i], X[i + 1] = b, a
 
 '''
+code = compile(code, '<test>', 'exec')
 
 def callback(recording):
     print('User code')
 
-start = time.process_time()
-try:
-	exec(code, {})
-except:
-	pass
-normal_time = time.process_time() - start
+start = time.perf_counter()
+exec(code, {})
+normal_time = time.perf_counter() - start
 print('Normal exec:   %.5f' % normal_time)
 
-start = time.process_time()
-recording = execorder.exec(code, 0, callback)
-recorded_time = time.process_time() - start
+import execorder
+start = time.perf_counter()
+recording = execorder.exec(code) #, callback=callback)
+recorded_time = time.perf_counter() - start
 print('Recorded exec: %.5f (%.2fx slower)' % (recorded_time, recorded_time / normal_time))
-
+print('Recorded', format(recording.steps(), ','), 'execution steps')
