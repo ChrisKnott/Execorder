@@ -7,8 +7,8 @@
 #include "ceval.h"
 #include "frameobject.h"
 #include "opcode.h"
-
 #include "recording.h"
+#include <atomic>
 
 #define TOP()       (frame->f_stacktop[-1])
 #define SECOND()    (frame->f_stacktop[-2])
@@ -16,7 +16,7 @@
 #define NAME()      (PyTuple_GET_ITEM(((PyTupleObject*)frame->f_code->co_names), (oparg)))
 
 Py_ssize_t recording_i, my_code_i;
-int running_execs = 0;
+std::atomic<int> running_execs = 0;
 
 bool get_recording(PyFrameObject* frame, RecordingObject** recording){
     PyObject* in_my_code = NULL;
@@ -175,6 +175,7 @@ int trace_step(PyFrameObject *frame, RecordingObject* recording, int what){
     return err;
 }
 
+
 int trace(PyObject *obj, PyFrameObject *frame, int what, PyObject *arg){
     int err = 0;
     if(what == PyTrace_OPCODE){
@@ -182,7 +183,8 @@ int trace(PyObject *obj, PyFrameObject *frame, int what, PyObject *arg){
     } else {
         RecordingObject* recording = NULL;
         bool in_my_code = get_recording(frame, &recording);
-        if(recording == NULL && what == PyTrace_CALL){
+
+        if(recording == NULL && what == PyTrace_CALL && frame->f_back != NULL){
             // Newly called frame - copy possible Recording from parent
             _PyCode_GetExtra((PyObject*)frame->f_back->f_code, recording_i, (void**)&recording);
             _PyCode_SetExtra((PyObject*)frame->f_code, recording_i, (void*)recording);
@@ -213,12 +215,20 @@ void mark_code_with_recording(PyObject* code, RecordingObject* recording){
     }
 }
 
+
+
 static PyObject* exec(PyObject *self, PyObject *args, PyObject *kwargs){
-    PyObject *code, *callback = NULL;
+    PyObject *code_str, *globals = PyDict_New(), *callback = NULL;
     long max_steps = 0, record_state = 1;
-    char *keywords[] = {"", "callback", "max_steps", "record_state", NULL};
-    if(PyArg_ParseTupleAndKeywords(args, kwargs, "O|$Olp:exec", keywords, &code, 
+    char *keywords[] = {"", "", "callback", "max_steps", "record_state", NULL};
+    if(PyArg_ParseTupleAndKeywords(args, kwargs, "O|O$Olp:exec", keywords, &code_str, &globals,
                                                                 &callback, &max_steps, &record_state)){
+        auto code_utf8 = PyUnicode_AsUTF8(code_str);
+        auto code = Py_CompileStringExFlags(code_utf8, "<execorder>", Py_file_input, NULL, -1);
+        if(PyErr_Occurred()){
+            return NULL;    // Compile failure
+        }
+
         auto recording = Recording_New(code);
         recording->record_state = (bool)record_state;
         recording->callback = callback;
@@ -228,14 +238,12 @@ static PyObject* exec(PyObject *self, PyObject *args, PyObject *kwargs){
 
         auto builtins = PyDict_Copy(PyEval_GetBuiltins());
         PyDict_SetItemString(builtins, "__cffi_backend_extern_py", Py_None);    // Clear gevent nonsense
-
-        auto globals = PyDict_New();
         PyDict_SetItemString(globals, "__builtins__", builtins);
 
-        PyEval_SetTrace((Py_tracefunc)trace, NULL); // Turn on tracing
-        
         running_execs++;
-        PyEval_EvalCode(code, globals, NULL);       // Run the code
+        PyEval_SetTrace((Py_tracefunc)trace, NULL);     // Turn on tracing
+        Recording_make_callback(recording);           // Do starting callback 
+        PyEval_EvalCode(code, globals, NULL);           // Run the code
         running_execs--;
 
         if(running_execs == 0){
