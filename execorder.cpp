@@ -215,8 +215,6 @@ void mark_code_with_recording(PyObject* code, RecordingObject* recording){
     }
 }
 
-
-
 static PyObject* exec(PyObject *self, PyObject *args, PyObject *kwargs){
     PyObject *code_str, *globals = PyDict_New(), *callback = NULL;
     long max_steps = 0, record_state = 1;
@@ -238,11 +236,11 @@ static PyObject* exec(PyObject *self, PyObject *args, PyObject *kwargs){
 
         auto builtins = PyDict_Copy(PyEval_GetBuiltins());
         PyDict_SetItemString(builtins, "__cffi_backend_extern_py", Py_None);    // Clear gevent nonsense
-        PyDict_SetItemString(globals, "__builtins__", builtins);
+        //PyDict_SetItemString(globals, "__builtins__", builtins);
 
         running_execs++;
         PyEval_SetTrace((Py_tracefunc)trace, NULL);     // Turn on tracing
-        Recording_make_callback(recording);           // Do starting callback 
+        Recording_make_callback(recording);             // Starting callback 
         PyEval_EvalCode(code, globals, NULL);           // Run the code
         running_execs--;
 

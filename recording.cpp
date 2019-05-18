@@ -16,7 +16,8 @@ auto unpickler_str = PyUnicode_FromString("Unpickler");
 auto dump_str = PyUnicode_FromString("dump");
 auto bytesio_str = PyUnicode_FromString("BytesIO");
 
-PyObject* Recording_check_const(RecordingObject*, PyObject*);
+//PyObject* Recording_check_const(RecordingObject*, PyObject*&);
+bool Recording_check_const(RecordingObject*, PyObject*&);
 
 static void Recording_new_milestone(RecordingObject* self){
     self->pickle_order = new PickleOrder();
@@ -87,6 +88,7 @@ static void inplace_opcode(int opcode, ObjectMap& objects, PyObject* a, PyObject
             break;
         case INPLACE_ADD:
             // TODO: unicode stuff
+            //printf("INPLACE_ADD %p %p\n", a, b);
             objects[a] = PyNumber_InPlaceAdd(objects[a], obj);
             break;
         case INPLACE_SUBTRACT:
@@ -150,19 +152,27 @@ static PyObject* Recording_dicts(PyObject *self, PyObject *args){
         
         auto objects = ObjectMap();     // Map that goes id -> python object
         
+        printf("----- BEGIN consts ----------------------------------\n");
         PyObject *key, *value; Py_ssize_t pos = 0;
         while(PyDict_Next(recording->consts, &pos, &key, &value)) {
+            printf("%p = ", key);
+            PRNTn(value);
             objects[key] = value;   // (in this dictionary, we have key == value)    
         }
 
+        printf("----- BEGIN tracked --------------------------------- \n");
         for(auto& obj_id : *pickle_order){
             objects[obj_id] = PyObject_CallMethod(unpickler, "load", NULL);
+            printf("%p = ", obj_id);
+            PRNTn(objects[obj_id]);
         }
 
+        //printf("----- BEGIN mutations -------------------------------\n");
         size_t s; unsigned char op; PyObject *a, *b, *c, *obj;
         for(auto& mutation : *mutations){
             std::tie(s, op, a, b, c) = mutation;
             if(s <= step){
+                //b = Recording_check_const(recording, b);
                 switch(op){
                     case STORE_ATTR:    // a.b = c
                         PyObject_SetAttr(objects[a], b, c);
@@ -318,13 +328,19 @@ bool Recording_object_tracked(RecordingObject* self, PyObject* obj){
 int track_object(PyObject* obj, PyObject* args){
     auto self = (RecordingObject*)args;
     if(obj != NULL && !PyModule_Check(obj)){
+        bool is_const = Recording_check_const(self, obj);
         if(!Recording_object_tracked(self, obj)){
             self->tracked_objects.insert(obj);
 
             // This object hasn't been pickled for this Milestone yet...
-            PyObject_CallMethodObjArgs(self->pickler, dump_str, obj, NULL);
+            if(!is_const){
+                PyObject_CallMethodObjArgs(self->pickler, dump_str, obj, NULL);
+            }
+
             if(PyErr_Occurred() == NULL){
-                self->pickle_order->push_back(obj);
+                if(!is_const){
+                    self->pickle_order->push_back(obj);
+                }
 
                 // Saved object successfully, track it's sub-objects too
                 auto type = Py_TYPE(obj);
@@ -346,10 +362,11 @@ void Recording_track_object(RecordingObject* self, PyObject* object){
     track_object(object, (PyObject*)self);
 }
 
-PyObject* Recording_check_const(RecordingObject* self, PyObject* obj){
+bool Recording_check_const(RecordingObject* self, PyObject* &obj){
     if(obj != NULL){
         if(Py_TYPE(obj)->tp_hash == PyObject_HashNotImplemented){
-            return obj;
+            //return obj;
+            return false;
         }
         else {
             PyObject* key = obj;
@@ -360,7 +377,13 @@ PyObject* Recording_check_const(RecordingObject* self, PyObject* obj){
                 key = PyLong_FromLong((long)hash);
             }
             
-            PyObject* saved_obj = PyDict_GetItem(self->consts, key);
+            PyObject* saved_obj = PyDict_GetItemWithError(self->consts, key);
+            if(PyErr_Occurred()){
+                PyErr_Clear();  // Can happen if obj is something like (1, 2, [])
+                //return obj;
+                return false;
+            }
+
             if(saved_obj == NULL){
                 PyDict_SetItem(self->consts, key, obj);     // Save new const object (this also stops GC)
                 saved_obj = obj;
@@ -370,10 +393,14 @@ PyObject* Recording_check_const(RecordingObject* self, PyObject* obj){
                 Py_DECREF(key);
             }
 
-            return saved_obj;
+            obj = saved_obj;
+            return true;
+            //Recording_track_object(self, saved_obj);
+            //return saved_obj;
         }
     }
-    return NULL;
+    //return NULL;
+    return true;
 }
 
 int Recording_record_trace_event(RecordingObject* self, int event, PyFrameObject* frame){
@@ -443,11 +470,22 @@ int Recording_record(RecordingObject* self, int event, PyObject* a, PyObject* b,
             break;
         default:
             // Mutation event
-            b = Recording_check_const(self, b);
-            c = Recording_check_const(self, c);
+            
+            /*
+            printf("\n%p %p %p =================================\n", a, b, c);
+            PRNTn(a);
+            PRNTn(b);
+            PRNTn(c);
+            */
+
+            /*b =*/ Recording_check_const(self, b);
+            /*c = */Recording_check_const(self, c);
+            //printf("%p %p %p ---------------------------------\n", a, b, c);
+            Recording_track_object(self, b);
             Recording_track_object(self, c);
             mutation = Mutation(self->steps.size(), event, a, b, c);
             self->mutations->push_back(mutation);
+            //printf("====================================================================================\n\n");
             break;
     }
 
