@@ -5,7 +5,7 @@ import random
 
 random.seed(123)
 
-X = [random.randint(0, 100) for n in range(2000)]
+X = [random.randint(0, 100) for n in range(2500)]
 
 done = False
 while not done:
@@ -18,7 +18,6 @@ while not done:
                 X[i], X[i + 1] = b, a
 
 '''
-code = compile(code, '<test>', 'exec')
 
 def callback(recording):
     print('User code')
@@ -34,3 +33,8 @@ recording = execorder.exec(code) #, callback=callback)
 recorded_time = time.perf_counter() - start
 print('Recorded exec: %.5f (%.2fx slower)' % (recorded_time, recorded_time / normal_time))
 print('Recorded', format(recording.steps(), ','), 'execution steps')
+
+import time
+time.sleep(5.0)
+
+print('=====EXIT=====')

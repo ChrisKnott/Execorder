@@ -16,7 +16,7 @@ while not done:
                 done = False
                 X[i], X[i + 1] = b, a
     #x = repr(gevent.getcurrent())
-print(X)
+
 print('DONE %d')
 '''
 
@@ -27,14 +27,24 @@ def ptr(obj):
 
 def callback(recording):
 	print('Callback', ptr(recording), recording.steps(), 'steps')
-	gevent.sleep(0.001)
+	#gevent.sleep(0.001)
 
 def start():
 	print('Starting', id(gevent.getcurrent()))
 	s = time.perf_counter()
-	rec = execorder.exec(bubble % id(gevent.getcurrent()), callback=callback)
+	rec = execorder.exec(bubble % id(gevent.getcurrent()))#, callback=callback)
 	print(rec.steps())
 	print('Finished', id(gevent.getcurrent()), time.perf_counter() - s)
+	print(rec.state(10000).get('X'))
+
+
+s = time.perf_counter()
+exec(bubble)#, callback=callback)
+print(time.perf_counter() - s)
+
+start()
+
+exit()
 
 gevent.spawn(start)
 gevent.spawn(start)

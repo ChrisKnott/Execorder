@@ -19,7 +19,7 @@ using Milestone = std::tuple<MutationList*, PickleOrder*, PyObject*>;
     is extremely brittle or hacky.
 
     One major improvement would be moving all the pure C++ code (e.g. ->push_back)
-    to separate threads to allow for concurrent execution.
+    to separate threads (real, non-Python threads) to allow for concurrent execution.
 */
 
 // ==== class Recording ====================

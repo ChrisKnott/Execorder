@@ -348,33 +348,29 @@ void Recording_track_object(RecordingObject* self, PyObject* object){
 
 PyObject* Recording_check_const(RecordingObject* self, PyObject* obj){
     if(obj != NULL){
-        if(PyList_Check(obj) || PyDict_Check(obj) || PySet_Check(obj)){
-            // These types can't be const (minor optimisation)
+        if(Py_TYPE(obj)->tp_hash == PyObject_HashNotImplemented){
             return obj;
-        } else {
+        }
+        else {
             PyObject* key = obj;
-            if(PyNumber_Check(obj)){
-                // 1.0, True, 1, 1+0j are equal as dict keys, so need to special case this
-                key = PyTuple_Pack(2, obj, Py_TYPE(obj));
+            if(PyNumber_Check(obj) && !PyLong_CheckExact(obj)){
+                // 1 == 1.0, True, 1+0j as dict keys, so need to special case this
+                auto hash = PyObject_Hash(obj);
+                hash ^= PyObject_Hash((PyObject*)Py_TYPE(obj));
+                key = PyLong_FromLong((long)hash);
+            }
+            
+            PyObject* saved_obj = PyDict_GetItem(self->consts, key);
+            if(saved_obj == NULL){
+                PyDict_SetItem(self->consts, key, obj);     // Save new const object (this also stops GC)
+                saved_obj = obj;
             }
 
-            PyObject* saved_obj = PyDict_GetItemWithError(self->consts, key);
-            if(PyErr_Occurred()){
-                PyErr_Clear();
-                return obj;                                     // Not hashable, use original object
-            } else {
-                if(saved_obj == NULL){
-                    PyDict_SetItem(self->consts, key, obj);     // Save new const object (this also stops GC)
-                    saved_obj = obj;
-                }
-
-                if(key != obj){
-                    Py_DECREF(key);
-                }
-
-                Recording_track_object(self, saved_obj);
-                return saved_obj;
+            if(key != obj){
+                Py_DECREF(key);
             }
+
+            return saved_obj;
         }
     }
     return NULL;
