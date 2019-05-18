@@ -152,19 +152,19 @@ static PyObject* Recording_dicts(PyObject *self, PyObject *args){
         
         auto objects = ObjectMap();     // Map that goes id -> python object
         
-        printf("----- BEGIN consts ----------------------------------\n");
+        //printf("----- BEGIN consts ----------------------------------\n");
         PyObject *key, *value; Py_ssize_t pos = 0;
         while(PyDict_Next(recording->consts, &pos, &key, &value)) {
-            printf("%p = ", key);
-            PRNTn(value);
+            //printf("%p = ", key);
+            //PRNTn(value);
             objects[key] = value;   // (in this dictionary, we have key == value)    
         }
 
-        printf("----- BEGIN tracked --------------------------------- \n");
+        //printf("----- BEGIN tracked --------------------------------- \n");
         for(auto& obj_id : *pickle_order){
+            //printf("%p = ", obj_id);
+            //PRNTn(objects[obj_id]);
             objects[obj_id] = PyObject_CallMethod(unpickler, "load", NULL);
-            printf("%p = ", obj_id);
-            PRNTn(objects[obj_id]);
         }
 
         //printf("----- BEGIN mutations -------------------------------\n");

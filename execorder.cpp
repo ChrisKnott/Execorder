@@ -236,7 +236,7 @@ static PyObject* exec(PyObject *self, PyObject *args, PyObject *kwargs){
 
         auto builtins = PyDict_Copy(PyEval_GetBuiltins());
         PyDict_SetItemString(builtins, "__cffi_backend_extern_py", Py_None);    // Clear gevent nonsense
-        //PyDict_SetItemString(globals, "__builtins__", builtins);
+        PyDict_SetItemString(globals, "__builtins__", builtins);
 
         running_execs++;
         PyEval_SetTrace((Py_tracefunc)trace, NULL);     // Turn on tracing
