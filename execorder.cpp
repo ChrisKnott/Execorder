@@ -90,7 +90,7 @@ int trace_opcode(PyFrameObject* frame){
     auto instructions = PyBytes_AS_STRING(frame->f_code->co_code);
     auto opcode = instructions[frame->f_lasti];
     auto oparg  = instructions[frame->f_lasti + 1];
-
+    
     switch(opcode){
         case STORE_FAST:
             mutation(frame, STORE_FAST, oparg, NULL, NULL, TOP());
@@ -191,7 +191,10 @@ int trace(PyObject *obj, PyFrameObject *frame, int what, PyObject *arg){
         }
 
         if(recording != NULL){
-            frame->f_trace_opcodes = 1;
+            if(recording->record_state){
+                frame->f_trace_opcodes = 1;
+            }
+
             if(in_my_code){
                 err = trace_step(frame, recording, what);
             }
@@ -216,7 +219,7 @@ void mark_code_with_recording(PyObject* code, RecordingObject* recording){
 }
 
 static PyObject* exec(PyObject *self, PyObject *args, PyObject *kwargs){
-    PyObject *code_str, *globals = PyDict_New(), *callback = NULL;
+    PyObject *code_str, *globals, *callback = NULL;
     long max_steps = 0, record_state = 1;
     char *keywords[] = {"", "", "callback", "max_steps", "record_state", NULL};
     if(PyArg_ParseTupleAndKeywords(args, kwargs, "O|O$Olp:exec", keywords, &code_str, &globals,
@@ -234,9 +237,11 @@ static PyObject* exec(PyObject *self, PyObject *args, PyObject *kwargs){
 
         mark_code_with_recording(code, recording);  // Attached recoding to code object
 
+        globals = PyDict_New();
         auto builtins = PyDict_Copy(PyEval_GetBuiltins());
         PyDict_SetItemString(builtins, "__cffi_backend_extern_py", Py_None);    // Clear gevent nonsense
         PyDict_SetItemString(globals, "__builtins__", builtins);
+        Py_DECREF(builtins);
 
         running_execs++;
         PyEval_SetTrace((Py_tracefunc)trace, NULL);     // Turn on tracing

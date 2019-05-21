@@ -24,6 +24,7 @@ static void Recording_new_milestone(RecordingObject* self){
     self->mutations = new MutationList(); 
     self->mutations->reserve(200000);
 
+    Py_XDECREF(self->pickler);  // Forget the Pickler, we keep the BytesIO it wrote to
     auto pickle_bytes = PyObject_CallMethodObjArgs(io_module, bytesio_str, NULL);  
     self->pickler = PyObject_CallMethodObjArgs(pickle_module, pickler_str, pickle_bytes, NULL);
 
@@ -42,6 +43,7 @@ static PyObject* Recording_new(PyTypeObject *type, PyObject *args, PyObject *kwd
     self->consts = PyDict_New();
     self->global_frame = NULL;
     self->callback_counter = 0;
+    self->pickler = NULL;
     Recording_new_milestone(self);
     return (PyObject*) self;
 }
@@ -51,8 +53,6 @@ static void Recording_dealloc(RecordingObject *self){
     Py_DECREF(self->code);
     Py_DECREF(self->visits);
     Py_DECREF(self->consts);
-    self->pickle_order = NULL;
-
     MutationList* mutations; PickleOrder* pickle_order; PyObject* pickle_bytes;
     for(auto& milestone : self->milestones){
         std::tie(mutations, pickle_order, pickle_bytes) = milestone;
@@ -60,6 +60,9 @@ static void Recording_dealloc(RecordingObject *self){
         delete pickle_order;
         Py_DECREF(pickle_bytes);
     }
+    self->pickle_order = NULL;
+    std::vector<Step>().swap(self->steps);
+    std::vector<Milestone>().swap(self->milestones);
     Py_TYPE(self)->tp_free((PyObject *) self);
 }
 
@@ -157,7 +160,7 @@ static PyObject* Recording_dicts(PyObject *self, PyObject *args){
         while(PyDict_Next(recording->consts, &pos, &key, &value)) {
             //printf("%p = ", key);
             //PRNTn(value);
-            objects[key] = value;   // (in this dictionary, we have key == value)    
+            objects[value] = value;   // (in this dictionary, we have key == value except for non-int numbers)    
         }
 
         //printf("----- BEGIN tracked --------------------------------- \n");
@@ -218,7 +221,14 @@ static PyObject* Recording_dicts(PyObject *self, PyObject *args){
             }
         }
 
-        return Py_BuildValue("NN", globals, locals);   // state is now as it was on requested step
+        if(PyErr_Occurred()){
+            PyErr_Print();
+        }
+
+        auto dicts = Py_BuildValue("NN", globals, locals);
+        //Py_DECREF(globals);
+        //Py_DECREF(locals);
+        return dicts;   // state is now as it was on requested step
     }
     return NULL;
 }
@@ -252,6 +262,7 @@ static PyObject* Recording_line(PyObject *self, PyObject *args){
             if(0 <= n && n < recording->steps.size()){
                 auto step = recording->steps[n];
                 auto line = std::get<0>(step);
+                Py_DECREF(line_number);
                 line_number = PyLong_FromLong(line);
             }
         }
@@ -322,6 +333,7 @@ RecordingObject* Recording_New(PyObject* code){
 }
 
 bool Recording_object_tracked(RecordingObject* self, PyObject* obj){
+    //printf("Recording_object_tracked\n");
     return self->tracked_objects.contains(obj);
 }
 
@@ -363,6 +375,7 @@ void Recording_track_object(RecordingObject* self, PyObject* object){
 }
 
 bool Recording_check_const(RecordingObject* self, PyObject* &obj){
+    //printf("Recording_check_const\n");
     if(obj != NULL){
         if(Py_TYPE(obj)->tp_hash == PyObject_HashNotImplemented){
             //return obj;
@@ -404,8 +417,8 @@ bool Recording_check_const(RecordingObject* self, PyObject* &obj){
 }
 
 int Recording_record_trace_event(RecordingObject* self, int event, PyFrameObject* frame){
+    //printf("Recording_record_trace_event\n");
     int line_number = frame->f_lineno;
-
     // Save step number for this line visit
     while(PyList_Size(self->visits) < line_number){
         auto new_list = PyList_New(0);
@@ -414,11 +427,13 @@ int Recording_record_trace_event(RecordingObject* self, int event, PyFrameObject
     }
     auto visit_list = PyList_GetItem(self->visits, line_number - 1);
     auto step = (long)self->steps.size();
-    PyList_Append(visit_list, PyLong_FromLong(step));
-
+    auto py_step = PyLong_FromLong(step);
+    PyList_Append(visit_list, py_step);
+    Py_DECREF(py_step);
     // Save line number for this step
     self->steps.push_back(Step(line_number, event, frame));
-
+/*
+*/
     if(self->callback){
         self->callback_counter += 1;
         if(self->callback_counter >= 50000){
@@ -438,9 +453,8 @@ int Recording_record_trace_event(RecordingObject* self, int event, PyFrameObject
 }
 
 void Recording_make_callback(RecordingObject* self){
+    //printf("Recording_make_callback\n");
     if(self->callback != NULL && PyCallable_Check(self->callback)){
-        auto args = Py_BuildValue("(O)", self);
-        
         // We actually want to override safeguard about tracing during trace callback
         auto tstate = PyThreadState_Get();
         bool am_tracing = tstate->tracing;
@@ -449,8 +463,11 @@ void Recording_make_callback(RecordingObject* self){
             tstate->use_tracing = 1;
         }
 
-        PyEval_CallObject(self->callback, args);   // Call into to user code
-        
+        auto args = Py_BuildValue("(O)", self);
+        auto ret = PyEval_CallObject(self->callback, args);   // Call into to user code
+        Py_DECREF(ret);
+        Py_DECREF(args);
+
         if(am_tracing){
             tstate->tracing++;
             tstate->use_tracing = 0;
@@ -459,6 +476,7 @@ void Recording_make_callback(RecordingObject* self){
 }
 
 int Recording_record(RecordingObject* self, int event, PyObject* a, PyObject* b, PyObject* c){
+    //printf("Recording_record\n");
     Mutation mutation;
     int err = 0;
     switch(event){
@@ -477,9 +495,8 @@ int Recording_record(RecordingObject* self, int event, PyObject* a, PyObject* b,
             PRNTn(b);
             PRNTn(c);
             */
-
-            /*b =*/ Recording_check_const(self, b);
-            /*c = */Recording_check_const(self, c);
+            Recording_check_const(self, b);
+            Recording_check_const(self, c);
             //printf("%p %p %p ---------------------------------\n", a, b, c);
             Recording_track_object(self, b);
             Recording_track_object(self, c);

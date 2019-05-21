@@ -1,9 +1,9 @@
-import execorder, gevent
+import execorder, time, sys, gevent
 
 bubble = '''
 import random
 
-random.seed(123)
+#random.seed(123)
 X = [random.randint(0, 10) for n in range(700)]
 
 done = False
@@ -20,36 +20,29 @@ while not done:
 print('DONE %d')
 '''
 
-import time
-
 def ptr(obj):
 	return hex(id(obj)).upper()[2:].zfill(16)
 
 def callback(recording):
 	print('Callback', ptr(recording), recording.steps(), 'steps')
-	#gevent.sleep(0.001)
+	gevent.sleep(0)
 
 def start():
 	print('Starting', id(gevent.getcurrent()))
 	s = time.perf_counter()
-	rec = execorder.exec(bubble % id(gevent.getcurrent()))#, callback=callback)
-	print(rec.steps())
-	print('Finished', id(gevent.getcurrent()), time.perf_counter() - s)
-	print(rec.state(10000).get('X'))
+	rec = execorder.exec(bubble % id(gevent.getcurrent()), record_state=True, callback=callback)
+	t = time.perf_counter() - s
+	steps = rec.steps()
+	X = rec.state(steps)['X']
+	print('Finished', id(gevent.getcurrent()), t, steps, X[:3], X[-3:])
+	
+N = 8
+for rep in range(3):
+	print('\n======= NEW ROUND ======\n')
+	for t in range(N):
+		gevent.spawn(start)
 
+	for _ in range(int(1.4 * N)):
+		gevent.sleep(1.0)
+		print('waiting..........')
 
-s = time.perf_counter()
-exec(bubble)#, callback=callback)
-print(time.perf_counter() - s)
-
-start()
-
-exit()
-
-gevent.spawn(start)
-gevent.spawn(start)
-gevent.spawn(start)
-print('Spawned')
-
-for _ in range(5):
-	gevent.sleep(1.0)
