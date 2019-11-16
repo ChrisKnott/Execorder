@@ -421,7 +421,8 @@ bool Recording_check_const(RecordingObject* self, PyObject* &obj){
 
 int Recording_record_trace_event(RecordingObject* self, int event, PyFrameObject* frame){
     int line_number = frame->f_lineno;
-
+/*
+*/
     // Save step number for this line visit
     while(PyList_Size(self->visits) < line_number){
         auto new_list = PyList_New(0);
@@ -436,7 +437,6 @@ int Recording_record_trace_event(RecordingObject* self, int event, PyFrameObject
     
     // Save line number for this step
     self->steps.push_back(Step(line_number, event, frame));
-
     if(self->callback){
         self->callback_counter += 1;
         if(self->callback_counter >= 50000){

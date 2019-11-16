@@ -63,9 +63,9 @@ void mutation(PyFrameObject* frame, int opcode, int i, PyObject* a, PyObject* b,
         // e.g. my code called random.shuffle(X) and we are in shuffle's implementation
         switch(opcode){
             case STORE_SUBSCR:              // a[b] = c
-            case DELETE_SUBSCR:
+            case DELETE_SUBSCR:             // del a[b]
             case STORE_ATTR:                // a.b = c
-            case DELETE_ATTR:
+            case DELETE_ATTR:               // del a.b
             case INPLACE_POWER:             // a **= b
             case INPLACE_MULTIPLY:          // a *= b
             case INPLACE_MATRIX_MULTIPLY:   // a @= b

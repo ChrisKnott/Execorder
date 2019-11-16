@@ -8,13 +8,13 @@
 using Step = std::tuple<int, int, PyFrameObject*>;
 using Mutation = std::tuple<size_t, unsigned char, PyObject*, PyObject*, PyObject*>;
 using MutationList = std::vector<Mutation>;
-using ObjectSet = spp::sparse_hash_set<PyObject*>;
+using ObjectSet = phmap::flat_hash_set<PyObject*>;
 using ObjectMap = phmap::flat_hash_map<PyObject*, PyObject*>;
 using PickleOrder = std::vector<PyObject*>;
 using Milestone = std::tuple<MutationList*, PickleOrder*, PyObject*>;
 
 /*
-    The current implementation of this is fairly slow but robust.
+    The current implementation of this is fairly slow, but robust.
 
     There are several potentially faster implementations but their implementation
     is extremely brittle or hacky.
