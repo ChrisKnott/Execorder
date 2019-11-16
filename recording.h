@@ -3,12 +3,13 @@
 #include "frameobject.h"
 #include <vector>
 #include <tuple>
-#include "sparsepp/spp.h"
+#include "parallel_hashmap/phmap.h"
 
 using Step = std::tuple<int, int, PyFrameObject*>;
 using Mutation = std::tuple<size_t, unsigned char, PyObject*, PyObject*, PyObject*>;
 using MutationList = std::vector<Mutation>;
 using ObjectSet = spp::sparse_hash_set<PyObject*>;
+using ObjectMap = phmap::flat_hash_map<PyObject*, PyObject*>;
 using PickleOrder = std::vector<PyObject*>;
 using Milestone = std::tuple<MutationList*, PickleOrder*, PyObject*>;
 
@@ -36,6 +37,7 @@ typedef struct {
     PyObject*               visits;			// Use Python list because user can access it
     std::vector<Milestone>  milestones;
     PyObject*               consts;
+    ObjectMap               objects;
     ObjectSet               tracked_objects;
     PyObject*               global_frame;
     

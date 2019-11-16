@@ -1,13 +1,22 @@
 // DEBUG stuff ==================================================
 #define PRNT(obj) PyObject_Print(obj, stdout, 0);
 #define PRNTn(obj) PRNT(obj); printf("\n");
+
+#include <chrono>  // for high_resolution_clock
+using Time = std::chrono::time_point<std::chrono::high_resolution_clock>;
+static Time _DEBUG_TIME(Time t){
+    auto t_end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = t_end - t;
+    printf("%4d\n", (int)(elapsed.count() * 1000));
+    return std::chrono::high_resolution_clock::now();
+}
+auto DEBUG_TIME_VAL = std::chrono::high_resolution_clock::now();
+#define DEBUG_TIME(TAG) ;//printf("%10s", TAG); DEBUG_TIME_VAL = _DEBUG_TIME(DEBUG_TIME_VAL);
 //===============================================================
 
 #include "recording.h"
 #include "structmember.h"
 #include "opcode.h"
-
-using ObjectMap = spp::sparse_hash_map<PyObject*, PyObject*>;
 
 PyObject* io_module = NULL;
 PyObject* pickle_module = NULL;
@@ -41,6 +50,7 @@ static PyObject* Recording_new(PyTypeObject *type, PyObject *args, PyObject *kwd
     self->steps.reserve(10000);
     self->visits = PyList_New(0);
     self->consts = PyDict_New();
+    self->objects = ObjectMap();
     self->global_frame = NULL;
     self->callback_counter = 0;
     self->pickler = NULL;
@@ -119,17 +129,23 @@ static void inplace_opcode(int opcode, ObjectMap& objects, PyObject* a, PyObject
 
 static PyObject* Recording_dicts(PyObject *self, PyObject *args){
     // TODO: preserve state so that subsequent calls to step + 1 are fast?
-
     PyObject* step_obj;
     if (PyArg_UnpackTuple(args, "dicts", 1, 1, &step_obj)) {
+        DEBUG_TIME("START");
+
+        int step = PyLong_AsLong(step_obj);
+        if(PyErr_Occurred()){
+            // Probably gave something that isn't an integer as argument
+            return NULL;
+        }
+
         RecordingObject* recording = (RecordingObject*)self;
-        int step = std::min((int)recording->steps.size() - 1, (int)PyLong_AsLong(step_obj));
+        step = std::min((int)recording->steps.size() - 1, std::max(0, step));
         auto frame = (PyObject*)std::get<2>(recording->steps[step]);
 
         // Find the relevant Milestone
         MutationList* mutations = NULL; PickleOrder* pickle_order; PyObject* pickle_bytes;
         std::tie(mutations, pickle_order, pickle_bytes) = recording->milestones[0];
-        
         for(auto& milestone : recording->milestones){
             auto milestone_mutations = std::get<0>(milestone);
             if(milestone_mutations->size() == 0){
@@ -144,6 +160,8 @@ static PyObject* Recording_dicts(PyObject *self, PyObject *args){
             }
         }
 
+        DEBUG_TIME("MUTATION");
+
         // Replay mutations up to 'step' so objects are in the correct state (baby VM!)
         auto locals = PyDict_New();
         auto globals = PyDict_New();
@@ -153,54 +171,46 @@ static PyObject* Recording_dicts(PyObject *self, PyObject *args){
         auto bytesio = PyObject_CallMethodObjArgs(io_module, bytesio_str, bytes, NULL); // bytes_io = io.BytesIO(bytes)
         auto unpickler = PyObject_CallMethodObjArgs(pickle_module, unpickler_str, bytesio, NULL);
         
-        auto objects = ObjectMap();     // Map that goes id -> python object
+        DEBUG_TIME("CONSTRUCT");
         
-        //printf("----- BEGIN consts ----------------------------------\n");
-        PyObject *key, *value; Py_ssize_t pos = 0;
-        while(PyDict_Next(recording->consts, &pos, &key, &value)) {
-            //printf("%p = ", key);
-            //PRNTn(value);
-            objects[value] = value;   // (in this dictionary, we have key == value except for non-int numbers)    
-        }
-
-        //printf("----- BEGIN tracked --------------------------------- \n");
+        // Set object map to state at the start of the milestone
         for(auto& obj_id : *pickle_order){
-            //printf("%p = ", obj_id);
-            //PRNTn(objects[obj_id]);
-            objects[obj_id] = PyObject_CallMethod(unpickler, "load", NULL);
+            recording->objects[obj_id] = PyObject_CallMethod(unpickler, "load", NULL);
         }
 
-        //printf("----- BEGIN mutations -------------------------------\n");
+        DEBUG_TIME("UNPICKLE");
+
         size_t s; unsigned char op; PyObject *a, *b, *c, *obj;
         for(auto& mutation : *mutations){
             std::tie(s, op, a, b, c) = mutation;
             if(s <= step){
+                //TODO: think about whether this is definitely safe to drop...
                 //b = Recording_check_const(recording, b);
                 switch(op){
                     case STORE_ATTR:    // a.b = c
-                        PyObject_SetAttr(objects[a], b, c);
+                        PyObject_SetAttr(recording->objects[a], b, c);
                         break;
                     case STORE_SUBSCR:  // a[b] = c
-                        PyObject_SetItem(objects[a], b, c);
+                        PyObject_SetItem(recording->objects[a], b, c);
                         break;
 
                     case STORE_FAST:    // b = c
                     case STORE_NAME:    
                         if(a == recording->global_frame){
                     case STORE_GLOBAL:
-                            obj = objects[c];
+                            obj = recording->objects[c];
                             PyDict_SetItem(globals, b, obj ? obj : c);
                         } else if(a == frame){
-                            obj = objects[c];
+                            obj = recording->objects[c];
                             PyDict_SetItem(locals, b, obj ? obj : c);
                         }
                         break;
 
                     case DELETE_ATTR:   // del a.b
-                        PyObject_DelAttr(objects[a], b);
+                        PyObject_DelAttr(recording->objects[a], b);
                         break;
                     case DELETE_SUBSCR: // del a[b]
-                        PyObject_DelItem(objects[a], b);
+                        PyObject_DelItem(recording->objects[a], b);
                         break;
 
                     case DELETE_FAST:   // del b
@@ -214,21 +224,21 @@ static PyObject* Recording_dicts(PyObject *self, PyObject *args){
                         break;
 
                     default:
-                        inplace_opcode(op, objects, a, b);
+                        inplace_opcode(op, recording->objects, a, b);
                 }
             } else {
                 break;
             }
         }
 
+        // TEMP TEMP TEMP /////////////
         if(PyErr_Occurred()){
             PyErr_Print();
         }
 
-        auto dicts = Py_BuildValue("NN", globals, locals);
-        //Py_DECREF(globals);
-        //Py_DECREF(locals);
-        return dicts;   // state is now as it was on requested step
+        DEBUG_TIME("MINI VM");
+
+        return Py_BuildValue("NN", globals, locals);   // state is now as it was on requested step
     }
     return NULL;
 }
@@ -239,7 +249,7 @@ static PyObject* Recording_state(PyObject *self, PyObject *args){
         return NULL;
     } else {
         PyObject* state = PyTuple_GetItem(globals_locals, 0);
-        PyDict_Update(state, PyTuple_GetItem(globals_locals, 1));
+        PyDict_Update(state, PyTuple_GetItem(globals_locals, 1));   // Overwrite globals with locals
         return state;
     }
 }
@@ -333,7 +343,6 @@ RecordingObject* Recording_New(PyObject* code){
 }
 
 bool Recording_object_tracked(RecordingObject* self, PyObject* obj){
-    //printf("Recording_object_tracked\n");
     return self->tracked_objects.contains(obj);
 }
 
@@ -375,13 +384,10 @@ void Recording_track_object(RecordingObject* self, PyObject* object){
 }
 
 bool Recording_check_const(RecordingObject* self, PyObject* &obj){
-    //printf("Recording_check_const\n");
     if(obj != NULL){
         if(Py_TYPE(obj)->tp_hash == PyObject_HashNotImplemented){
-            //return obj;
             return false;
-        }
-        else {
+        } else {
             PyObject* key = obj;
             if(PyNumber_Check(obj) && !PyLong_CheckExact(obj)){
                 // 1 == 1.0, True, 1+0j as dict keys, so need to special case this
@@ -392,13 +398,13 @@ bool Recording_check_const(RecordingObject* self, PyObject* &obj){
             
             PyObject* saved_obj = PyDict_GetItemWithError(self->consts, key);
             if(PyErr_Occurred()){
-                PyErr_Clear();  // Can happen if obj is something like (1, 2, [])
-                //return obj;
+                PyErr_Clear();  // Can happen if obj is something like the tuple (1, 2, [])
                 return false;
             }
 
             if(saved_obj == NULL){
                 PyDict_SetItem(self->consts, key, obj);     // Save new const object (this also stops GC)
+                self->objects[obj] = obj;
                 saved_obj = obj;
             }
 
@@ -408,17 +414,14 @@ bool Recording_check_const(RecordingObject* self, PyObject* &obj){
 
             obj = saved_obj;
             return true;
-            //Recording_track_object(self, saved_obj);
-            //return saved_obj;
         }
     }
-    //return NULL;
     return true;
 }
 
 int Recording_record_trace_event(RecordingObject* self, int event, PyFrameObject* frame){
-    //printf("Recording_record_trace_event\n");
     int line_number = frame->f_lineno;
+
     // Save step number for this line visit
     while(PyList_Size(self->visits) < line_number){
         auto new_list = PyList_New(0);
@@ -430,10 +433,10 @@ int Recording_record_trace_event(RecordingObject* self, int event, PyFrameObject
     auto py_step = PyLong_FromLong(step);
     PyList_Append(visit_list, py_step);
     Py_DECREF(py_step);
+    
     // Save line number for this step
     self->steps.push_back(Step(line_number, event, frame));
-/*
-*/
+
     if(self->callback){
         self->callback_counter += 1;
         if(self->callback_counter >= 50000){
@@ -453,7 +456,6 @@ int Recording_record_trace_event(RecordingObject* self, int event, PyFrameObject
 }
 
 void Recording_make_callback(RecordingObject* self){
-    //printf("Recording_make_callback\n");
     if(self->callback != NULL && PyCallable_Check(self->callback)){
         // We actually want to override safeguard about tracing during trace callback
         auto tstate = PyThreadState_Get();
@@ -476,7 +478,6 @@ void Recording_make_callback(RecordingObject* self){
 }
 
 int Recording_record(RecordingObject* self, int event, PyObject* a, PyObject* b, PyObject* c){
-    //printf("Recording_record\n");
     Mutation mutation;
     int err = 0;
     switch(event){
@@ -488,21 +489,12 @@ int Recording_record(RecordingObject* self, int event, PyObject* a, PyObject* b,
             break;
         default:
             // Mutation event
-            
-            /*
-            printf("\n%p %p %p =================================\n", a, b, c);
-            PRNTn(a);
-            PRNTn(b);
-            PRNTn(c);
-            */
             Recording_check_const(self, b);
             Recording_check_const(self, c);
-            //printf("%p %p %p ---------------------------------\n", a, b, c);
             Recording_track_object(self, b);
             Recording_track_object(self, c);
             mutation = Mutation(self->steps.size(), event, a, b, c);
             self->mutations->push_back(mutation);
-            //printf("====================================================================================\n\n");
             break;
     }
 
