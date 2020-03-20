@@ -20,7 +20,7 @@ while not done:
 '''
 
 def callback(recording):
-    print('User code')
+    print('.', end='', flush=True)
 
 start = time.perf_counter()
 exec(code, {})
@@ -29,12 +29,8 @@ print('Normal exec:   %.5f' % normal_time)
 
 import execorder
 start = time.perf_counter()
-recording = execorder.exec(code) #, callback=callback)
+recording = execorder.exec(code, record_state=False, callback=callback)
 recorded_time = time.perf_counter() - start
 print('Recorded exec: %.5f (%.2fx slower)' % (recorded_time, recorded_time / normal_time))
 print('Recorded', format(recording.steps(), ','), 'execution steps')
 
-import time
-time.sleep(5.0)
-
-print('=====EXIT=====')
